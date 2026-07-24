@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      LOOPBACK_DATABASE_URL: sqlite+aiosqlite:///./data/loopback.db
+      LOOPBACK_CHROMA_PERSIST_DIR: chroma
+      LOOPBACK_DEBUG: "false"
+      # localhost Compose uses HTTP, so browsers cannot send Secure cookies.
+      # Set this to true for a deployment served over HTTPS.
+      LOOPBACK_AUTH_COOKIE_SECURE: "false"
+    ports:
+      - "8000:8000"
+    volumes:
+      - loopback-data:/app/data
+      - loopback-uploads:/app/uploads
+      - loopback-chroma:/app/chroma
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/ready')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # This URL is compiled into the browser bundle. Change it to the
+        # public HTTPS API URL when deploying outside local Docker Compose.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  loopback-data:
+  loopback-uploads:
+  loopback-chroma:

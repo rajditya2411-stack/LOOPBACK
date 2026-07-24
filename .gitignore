@@ -1,0 +1,97 @@
+# Environment files and secrets. Keep documented templates in version control.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Node.js / Next.js
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+out/
+**/out/
+dist/
+**/dist/
+build/
+**/build/
+.turbo/
+**/.turbo/
+.turbopack/
+**/.turbopack/
+coverage/
+**/coverage/
+*.tsbuildinfo
+
+# Python / FastAPI
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+.pytest_cache/
+**/.pytest_cache/
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.egg-info/
+
+# Local application state: database, document storage, and vector stores
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+backend/uploads/
+backend/chroma/
+backend/backend-port.txt
+/backend-port.txt
+
+# Test runners, local automation, and generated reports
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+.playwright-mcp/
+*.lcov
+
+# Logs, temporary files, and local runtime artifacts
+*.log
+logs/
+**/logs/
+tmp/
+temp/
+**/tmp/
+**/temp/
+*.tmp
+*.temp
+*.pid
+*.seed
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local dependency-tool state
+.npm/
+.pnpm-store/
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
