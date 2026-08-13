@@ -129,3 +129,54 @@ async def test_xai_no_credits_error_is_actionable(monkeypatch: pytest.MonkeyPatc
     assert error.value.code == "provider_account_unfunded"
     assert "no credits or licenses" in error.value.public_message
     assert ai_provider.XAIProvider().supports_embeddings is False
+
+
+@pytest.mark.asyncio
+async def test_provider_manager_openai(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self) -> dict[str, object]:
+            return {"choices": [{"message": {"content": "Hello from OpenAI"}}]}
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def post(self, _url: str, **_kwargs: object) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(ai_provider.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+    pm = ai_provider.ProviderManager(ai_provider.ProviderConfig(provider="openai", api_key="sk-test", model="gpt-4o-mini"))
+    res = await pm.complete_text([{"role": "user", "content": "Hi"}])
+    assert res == "Hello from OpenAI"
+
+
+@pytest.mark.asyncio
+async def test_provider_manager_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+
+        def json(self) -> dict[str, object]:
+            return {"content": [{"text": "Hello from Claude"}]}
+
+    class FakeClient:
+        async def __aenter__(self) -> "FakeClient":
+            return self
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+        async def post(self, _url: str, **_kwargs: object) -> FakeResponse:
+            return FakeResponse()
+
+    monkeypatch.setattr(ai_provider.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+    pm = ai_provider.ProviderManager(ai_provider.ProviderConfig(provider="anthropic", api_key="sk-ant-test", model="claude-sonnet-4-20250514"))
+    res = await pm.complete_text([{"role": "user", "content": "Hi"}])
+    assert res == "Hello from Claude"
+

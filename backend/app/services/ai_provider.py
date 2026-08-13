@@ -71,70 +71,173 @@ class OpenAICompatibleProvider:
     def __init__(self, config: ProviderConfig, base_url: str):
         self.config, self.base_url = config, base_url.rstrip("/")
 
-    async def complete_text(self, messages: Sequence[dict[str, str]]) -> str:
-        if not self.config.api_key.strip():
-            raise AIProviderError("An API key is required")
-        payload = {"model": self.config.model, "messages": list(messages), "temperature": self.config.temperature}
+    def _prepare_messages(self, messages: Sequence[dict[str, str] | AIMessage]) -> list[dict[str, str]]:
+        formatted: list[dict[str, str]] = []
+        for m in messages:
+            role = m.role if isinstance(m, AIMessage) else m.get("role", "user")
+            content = m.content if isinstance(m, AIMessage) else m.get("content", "")
+            if content.strip():
+                formatted.append({"role": role, "content": content})
+        return formatted
+
+    async def complete_text(self, messages: Sequence[dict[str, str] | AIMessage]) -> str:
+        if not self.config.api_key or not self.config.api_key.strip():
+            raise AIProviderError("An API key is required. Please set your API key in Settings.", code="missing_api_key")
+        payload = {
+            "model": self.config.model,
+            "messages": self._prepare_messages(messages),
+            "temperature": self.config.temperature,
+        }
+        headers = {
+            "Authorization": f"Bearer {self.config.api_key.strip()}",
+            "Content-Type": "application/json",
+        }
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as client:
-                response = await client.post(f"{self.base_url}/chat/completions", headers={"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"}, json=payload)
+                response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            if response.status_code == 401 or response.status_code == 403:
+                raise AIProviderError(f"Invalid API key or unauthorized for {self.config.provider.capitalize()}.", code="invalid_api_key")
+            if response.status_code == 429:
+                raise AIProviderError(f"{self.config.provider.capitalize()} rate limit or quota exceeded. Check your billing status.", code="rate_limit_exceeded")
             if response.status_code >= 400:
-                raise AIProviderError(f"{self.config.provider} returned HTTP {response.status_code}")
+                detail = response.json().get("error", {}).get("message", f"HTTP {response.status_code}") if response.headers.get("content-type", "").startswith("application/json") else f"HTTP {response.status_code}"
+                raise AIProviderError(f"{self.config.provider.capitalize()} error: {detail}", code="provider_error")
             choices = response.json().get("choices", [])
             text = choices[0].get("message", {}).get("content", "") if choices else ""
             if not text:
-                raise AIProviderError(f"{self.config.provider} returned no text")
+                raise AIProviderError(f"{self.config.provider.capitalize()} returned no text content.")
             return str(text)
         except httpx.HTTPError as exc:
-            raise AIProviderError(f"Could not reach {self.config.provider}") from exc
+            raise AIProviderError(f"Could not connect to {self.config.provider.capitalize()}: network failure or timeout.") from exc
 
 
 class AnthropicProvider:
-    def __init__(self, config: ProviderConfig): self.config = config
+    def __init__(self, config: ProviderConfig):
+        self.config = config
 
-    async def complete_text(self, messages: Sequence[dict[str, str]]) -> str:
-        system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
-        body = {"model": self.config.model, "max_tokens": 1024, "temperature": self.config.temperature, "messages": [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] != "system"]}
-        if system: body["system"] = system
+    def _prepare_messages(self, messages: Sequence[dict[str, str] | AIMessage]) -> tuple[str, list[dict[str, str]]]:
+        system_parts: list[str] = []
+        user_messages: list[dict[str, str]] = []
+        for m in messages:
+            role = m.role if isinstance(m, AIMessage) else m.get("role", "user")
+            content = m.content if isinstance(m, AIMessage) else m.get("content", "")
+            if not content.strip():
+                continue
+            if role == "system":
+                system_parts.append(content)
+            else:
+                user_messages.append({"role": role, "content": content})
+        return "\n\n".join(system_parts), user_messages
+
+    async def complete_text(self, messages: Sequence[dict[str, str] | AIMessage]) -> str:
+        if not self.config.api_key or not self.config.api_key.strip():
+            raise AIProviderError("An API key is required for Anthropic.", code="missing_api_key")
+        system, user_msgs = self._prepare_messages(messages)
+        body: dict[str, Any] = {
+            "model": self.config.model,
+            "max_tokens": 1024,
+            "temperature": self.config.temperature,
+            "messages": user_msgs,
+        }
+        if system:
+            body["system"] = system
+        headers = {
+            "x-api-key": self.config.api_key.strip(),
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as client:
-                response = await client.post("https://api.anthropic.com/v1/messages", headers={"x-api-key": self.config.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}, json=body)
-            if response.status_code >= 400: raise AIProviderError(f"Anthropic returned HTTP {response.status_code}")
+                response = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=body)
+            if response.status_code == 401 or response.status_code == 403:
+                raise AIProviderError("Invalid API key or unauthorized for Anthropic.", code="invalid_api_key")
+            if response.status_code == 429:
+                raise AIProviderError("Anthropic rate limit or quota exceeded.", code="rate_limit_exceeded")
+            if response.status_code >= 400:
+                err_msg = response.json().get("error", {}).get("message", f"HTTP {response.status_code}") if response.headers.get("content-type", "").startswith("application/json") else f"HTTP {response.status_code}"
+                raise AIProviderError(f"Anthropic error: {err_msg}", code="provider_error")
             blocks = response.json().get("content", [])
             text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict))
-            if not text: raise AIProviderError("Anthropic returned no text")
+            if not text:
+                raise AIProviderError("Anthropic returned no text content.")
             return text
-        except httpx.HTTPError as exc: raise AIProviderError("Could not reach Anthropic") from exc
+        except httpx.HTTPError as exc:
+            raise AIProviderError("Could not connect to Anthropic: network failure or timeout.") from exc
 
 
 class ProviderManager:
     """Single extension point for per-user BYOK inference."""
-    def __init__(self, config: ProviderConfig): self.config = config
+    def __init__(self, config: ProviderConfig):
+        # Normalize provider aliases
+        p = config.provider.lower()
+        if p == "grok":
+            p = "xai"
+        elif p == "claude":
+            p = "anthropic"
+        self.config = ProviderConfig(provider=p, api_key=config.api_key, model=config.model, temperature=config.temperature)
 
-    async def stream_text(self, messages: Sequence[dict[str, str]]) -> AsyncGenerator[str, None]:
-        """Provider-neutral stream contract; adapters can replace this with native SSE."""
+    async def stream_text(self, messages: Sequence[dict[str, str] | AIMessage]) -> AsyncGenerator[str, None]:
+        """Provider-neutral stream contract; chunks output to support SSE."""
         answer = await self.complete_text(messages)
-        for index in range(0, len(answer), 32):
-            yield answer[index:index + 32]
+        chunk_size = 32
+        for index in range(0, len(answer), chunk_size):
+            yield answer[index:index + chunk_size]
 
-    async def complete_text(self, messages: Sequence[dict[str, str]]) -> str:
+    async def complete_text(self, messages: Sequence[dict[str, str] | AIMessage]) -> str:
         provider = self.config.provider.lower()
-        if provider == "anthropic": return await AnthropicProvider(self.config).complete_text(messages)
+        if not self.config.api_key or not self.config.api_key.strip():
+            raise AIProviderError(f"Please provide an API key for {provider.capitalize()} in Settings.", code="missing_api_key")
+
+        if provider == "anthropic":
+            return await AnthropicProvider(self.config).complete_text(messages)
+
         if provider == "gemini":
-            contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]} for m in messages if m["role"] != "system"]
-            system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
-            body: dict[str, Any] = {"contents": contents, "generationConfig": {"temperature": self.config.temperature}}
-            if system: body["systemInstruction"] = {"parts": [{"text": system}]}
+            contents = []
+            system_parts = []
+            for m in messages:
+                role = m.role if isinstance(m, AIMessage) else m.get("role", "user")
+                content = m.content if isinstance(m, AIMessage) else m.get("content", "")
+                if not content.strip():
+                    continue
+                if role == "system":
+                    system_parts.append(content)
+                else:
+                    g_role = "model" if role == "assistant" else "user"
+                    contents.append({"role": g_role, "parts": [{"text": content}]})
+
+            body: dict[str, Any] = {
+                "contents": contents,
+                "generationConfig": {"temperature": self.config.temperature},
+            }
+            if system_parts:
+                body["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}
+
             try:
                 async with httpx.AsyncClient(timeout=httpx.Timeout(30, connect=10)) as client:
-                    response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/{self.config.model}:generateContent", headers={"x-goog-api-key": self.config.api_key}, json=body)
-                if response.status_code >= 400: raise AIProviderError(f"Gemini returned HTTP {response.status_code}")
+                    response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{self.config.model}:generateContent",
+                        headers={"x-goog-api-key": self.config.api_key.strip()},
+                        json=body,
+                    )
+                if response.status_code == 400 or response.status_code == 403 or response.status_code == 401:
+                    err_detail = response.json().get("error", {}).get("message", f"HTTP {response.status_code}") if response.headers.get("content-type", "").startswith("application/json") else f"HTTP {response.status_code}"
+                    raise AIProviderError(f"Gemini API key or model error: {err_detail}", code="invalid_api_key")
+                if response.status_code >= 400:
+                    raise AIProviderError(f"Gemini returned HTTP {response.status_code}", code="provider_error")
                 text = _gemini_text(response.json())
-                if not text: raise AIProviderError("Gemini returned no text")
+                if not text:
+                    raise AIProviderError("Gemini returned no text content.")
                 return text
-            except httpx.HTTPError as exc: raise AIProviderError("Could not reach Gemini") from exc
-        bases = {"openai": "https://api.openai.com/v1", "xai": "https://api.x.ai/v1", "kimi": "https://api.moonshot.ai/v1"}
-        if provider not in bases: raise AIProviderError(f"Unsupported AI provider: {provider}")
+            except httpx.HTTPError as exc:
+                raise AIProviderError("Could not connect to Gemini: network failure or timeout.") from exc
+
+        bases = {
+            "openai": "https://api.openai.com/v1",
+            "xai": "https://api.x.ai/v1",
+            "kimi": "https://api.moonshot.ai/v1",
+        }
+        if provider not in bases:
+            raise AIProviderError(f"Unsupported AI provider: {provider}")
         return await OpenAICompatibleProvider(self.config, bases[provider]).complete_text(messages)
 
 

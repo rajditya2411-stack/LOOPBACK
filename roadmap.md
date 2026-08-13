@@ -92,22 +92,22 @@ Frontend:
 
 * Create ✅
 * List ✅
-* Edit ✅
-* Delete ✅
+* Edit ❌
+* Delete ❌
 
 ## Tasks
 
-* [x] Add task edit modal
-* [x] Add task delete confirmation
-* [x] Connect update API
-* [x] Connect delete API
-* [x] Add due date UI
-* [x] Add priority UI
-* [x] Improve task cards
+* [ ] Add task edit modal
+* [ ] Add task delete confirmation
+* [ ] Connect update API
+* [ ] Connect delete API
+* [ ] Add due date UI
+* [ ] Add priority UI
+* [ ] Improve task cards
 
 ## Completion Criteria
 
-✅ A user can fully manage tasks from the UI.
+A user can fully manage tasks from the UI.
 
 ---
 
@@ -125,11 +125,11 @@ Frontend:
 
 ## Tasks
 
-* [x] Create goal UI
-* [x] Edit goal UI
-* [x] Delete goal UI
-* [x] Progress update UI
-* [x] Goal completion states
+* [ ] Create goal UI
+* [ ] Edit goal UI
+* [ ] Delete goal UI
+* [ ] Progress update UI
+* [ ] Goal completion states
 
 ## Completion Criteria
 
@@ -151,11 +151,11 @@ Frontend:
 
 ## Tasks
 
-* [x] Add memory creation
-* [x] Add memory editing
-* [x] Add memory deletion
-* [x] Add pin/unpin
-* [x] Improve memory cards
+* [ ] Add memory creation
+* [ ] Add memory editing
+* [ ] Add memory deletion
+* [ ] Add pin/unpin
+* [ ] Improve memory cards
 
 ## Completion Criteria
 
@@ -179,12 +179,12 @@ Missing:
 
 ## Tasks
 
-* [x] Add document deletion
-* [x] Add document detail page
-* [x] Show processing status
-* [x] Show processing errors
-* [x] Add retry option
-* [x] Show extracted information preview
+* [ ] Add document deletion
+* [ ] Add document detail page
+* [ ] Show processing status
+* [ ] Show processing errors
+* [ ] Add retry option
+* [ ] Show extracted information preview
 
 ## Completion Criteria
 
@@ -204,13 +204,10 @@ Remove unfinished sections.
 
 Tasks:
 
-* [x] Create settings API
-* [x] Connect user_settings table
-* [x] Replace static UI
-* [x] Allow AI preference changes
-* [x] Loading / error / success states
-* [x] Unsaved-change detection
-* [x] Theme sync to UI store
+* [ ] Create settings API
+* [ ] Connect user_settings table
+* [ ] Replace static UI
+* [ ] Allow AI preference changes
 
 ---
 
@@ -218,25 +215,19 @@ Tasks:
 
 Tasks:
 
-* [x] Add logout button
-* [x] Add profile editing
-* [x] Add password change UI
-* [x] Improve reset password UX
+* [ ] Add logout button
+* [ ] Add profile editing
+* [ ] Add password change UI
+* [ ] Improve reset password UX
 
 Production before deployment:
 
-* [x] Remove default JWT secret
-* [x] Require environment variables
-
-## Completion Criteria
-
-✅ Settings are live. Authentication account actions work end-to-end.
+* [ ] Remove default JWT secret
+* [ ] Require environment variables
 
 ---
 
 # Phase 3 — Connect the AI Brain
-
-> Status: Complete (2026-07-18)
 
 ## Goal
 
@@ -247,7 +238,6 @@ Move from "AI chatbot" to "AI workspace assistant".
 # 1. Complete RAG Pipeline
 
 Current:
-
 ```
 Upload
  ↓
@@ -264,12 +254,12 @@ Chat
 
 Need:
 
-* [x] Verify embeddings work
-* [x] Verify Chroma persistence
-* [x] Improve retrieval quality
-* [x] Add source references
-* [x] Add document citations
-* [x] Add context limits
+* [ ] Verify embeddings work
+* [ ] Verify Chroma persistence
+* [ ] Improve retrieval quality
+* [ ] Add source references
+* [ ] Add document citations
+* [ ] Add context limits
 
 ---
 
@@ -285,18 +275,16 @@ AI understands the workspace.
 
 Tasks:
 
-* [x] Include document context
-* [x] Include task context
-* [x] Include goal context
-* [x] Include memory context
-* [x] Improve streaming error handling
-* [x] Add conversation management
+* [ ] Include document context
+* [ ] Include task context
+* [ ] Include goal context
+* [ ] Include memory context
+* [ ] Improve streaming error handling
+* [ ] Add conversation management
 
 ---
 
 # Phase 4 — Build LoopBack Memory Intelligence
-
-> Status: Complete (2026-07-18)
 
 ## Goal
 
@@ -333,18 +321,16 @@ User prefers Python backend technologies.
 
 ## Tasks
 
-* [x] Create memory extraction pipeline
-* [x] Generate memory embeddings
-* [x] Store memory vectors
-* [x] Retrieve relevant memories during chat
-* [x] Add memory ranking
-* [x] Allow users to review AI memories
+* [ ] Create memory extraction pipeline
+* [ ] Generate memory embeddings
+* [ ] Store memory vectors
+* [ ] Retrieve relevant memories during chat
+* [ ] Add memory ranking
+* [ ] Allow users to review AI memories
 
 ---
 
 # Phase 5 — Build The AI Productivity Layer
-
-> Status: Complete (2026-07-18)
 
 ## Goal
 
@@ -360,12 +346,12 @@ Replace simple analytics with:
 
 Features:
 
-* [x] Daily focus summary
-* [x] Important tasks
-* [x] Goal progress
-* [x] AI recommendations
-* [x] Recent memories
-* [x] Work patterns
+* [ ] Daily focus summary
+* [ ] Important tasks
+* [ ] Goal progress
+* [ ] AI recommendations
+* [ ] Recent memories
+* [ ] Work patterns
 
 Example:
 
@@ -388,18 +374,16 @@ Suggested focus:
 
 Add commands:
 
-* [x] Review my week
-* [x] Summarize my documents
-* [x] Create tasks from document
-* [x] Analyze my progress
-* [x] Find forgotten goals
-* [x] Suggest next actions
+* [ ] Review my week
+* [ ] Summarize my documents
+* [ ] Create tasks from document
+* [ ] Analyze my progress
+* [ ] Find forgotten goals
+* [ ] Suggest next actions
 
 ---
 
 # Phase 6 — Analytics Intelligence
-
-> Status: Complete (2026-07-18)
 
 ## Do not build charts first.
 
@@ -409,11 +393,11 @@ Build insights.
 
 Tasks:
 
-* [x] Track completion trends
-* [x] Detect procrastination patterns
-* [x] Detect productive hours
-* [x] Generate weekly summaries
-* [x] Generate AI recommendations
+* [ ] Track completion trends
+* [ ] Detect procrastination patterns
+* [ ] Detect productive hours
+* [ ] Generate weekly summaries
+* [ ] Generate AI recommendations
 
 Example:
 
@@ -434,8 +418,6 @@ Convert 3 goals into scheduled tasks.
 
 # Phase 7 — Global Search
 
-> Status: Complete (2026-07-18)
-
 ## Goal
 
 Everything becomes searchable.
@@ -450,26 +432,24 @@ Search:
 
 Tasks:
 
-* [x] Implement document search
-* [x] Implement memory search
-* [x] Improve ranking
-* [x] Add filters
+* [ ] Implement document search
+* [ ] Implement memory search
+* [ ] Improve ranking
+* [ ] Add filters
 
 ---
 
 # Phase 8 — Workspace Features
 
-> Status: Complete (2026-07-18)
-
 ## Delay until core product works.
 
 Tasks:
 
-* [x] Workspace switching
-* [x] Workspace resources
-* [x] Member invitations
-* [x] Roles
-* [x] Permissions
+* [ ] Workspace switching
+* [ ] Workspace resources
+* [ ] Member invitations
+* [ ] Roles
+* [ ] Permissions
 
 ---
 
@@ -495,24 +475,24 @@ Before public launch:
 
 ## Security
 
-* [x] Remove default JWT fallback
-* [x] Secure authentication storage with HttpOnly browser cookies and CSRF protection
-* [x] Validate environment variables
-* [x] Test authorization
+* [ ] Remove default JWT fallback
+* [ ] Secure authentication storage
+* [ ] Validate environment variables
+* [ ] Test authorization
 
 ## Reliability
 
-* [x] Run migrations automatically in the container startup command
-* [x] Add API tests
-* [x] Add error handling
-* [x] Clean runtime files from source control and container contexts
+* [ ] Run migrations automatically
+* [ ] Add API tests
+* [ ] Add error handling
+* [ ] Clean runtime files
 
 ## Product
 
-* [x] Complete onboarding
-* [x] Improve empty states
-* [x] Add demo data option (`python -m app.database.seed` for a fresh local database)
-* [x] Improve loading states
+* [ ] Complete onboarding
+* [ ] Improve empty states
+* [ ] Add demo data option
+* [ ] Improve loading states
 
 ---
 
@@ -540,17 +520,16 @@ The final feeling should be:
 
 ## Immediate Order
 
-1. ~~Finish Tasks CRUD UI~~ ✅
-2. ~~Finish Goals CRUD UI~~ ✅
-3. ~~Finish Memory CRUD UI~~ ✅
-4. ~~Finish Documents management~~ ✅
-5. ~~Connect Settings~~ ✅
-6. ~~Complete Phase 2 — Settings and Account Polish~~ ✅
-7. ~~Test complete RAG pipeline~~ ✅
-8. ~~Build AI memory system~~ ✅
-9. ~~Build AI productivity assistant~~ ✅
-10. ~~Improve analytics~~ ✅
-11. ~~Polish and deploy~~ ✅
+1. Finish Tasks CRUD UI
+2. Finish Goals CRUD UI
+3. Finish Memory CRUD UI
+4. Finish Documents management
+5. Connect Settings
+6. Test complete RAG pipeline
+7. Build AI memory system
+8. Build AI productivity assistant
+9. Improve analytics
+10. Polish and deploy
 
 ```
 ```

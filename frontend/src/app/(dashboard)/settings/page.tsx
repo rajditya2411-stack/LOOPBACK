@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Settings, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Settings, Check, AlertCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { api } from "@/lib/api";
 import { useUIStore } from "@/store/ui-store";
 
@@ -219,6 +219,7 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [toast, setToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -516,11 +517,110 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <div className="grid gap-4 border-b border-[var(--border-subtle)] px-5 py-4 md:grid-cols-3">
-              <label className="text-sm">Provider<select aria-label="AI provider" value={form.ai_provider} onChange={(e) => updateForm("ai_provider", e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3"><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="xai">Grok (xAI)</option><option value="anthropic">Claude</option><option value="kimi">Kimi</option></select></label>
-              <label className="text-sm">API key<input aria-label="API key" type="password" autoComplete="off" placeholder={settings?.ai_configured ? "Saved key (leave blank to keep)" : "Paste your provider key"} value={form.ai_api_key} onChange={(e) => updateForm("ai_api_key", e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3" /></label>
-              <label className="text-sm">Model<select aria-label="AI model" value={form.ai_model} onChange={(e) => updateForm("ai_model", e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3">{(AI_MODELS[form.ai_provider] ?? []).map((model) => <option key={model.value} value={model.value}>{model.label}</option>)}{!(AI_MODELS[form.ai_provider] ?? []).some((model) => model.value === form.ai_model) && <option value={form.ai_model}>{form.ai_model}</option>}</select></label>
-              <label className="text-sm">Temperature<input aria-label="Temperature" type="number" min="0" max="2" step="0.1" value={form.ai_temperature} onChange={(e) => updateForm("ai_temperature", e.target.value)} className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3" /></label>
+            <div className="grid gap-4 border-b border-outline-variant px-5 py-4 md:grid-cols-2 lg:grid-cols-4">
+              <label className="text-sm font-medium text-on-surface">
+                Provider
+                <select
+                  aria-label="AI provider"
+                  value={form.ai_provider}
+                  onChange={(e) => {
+                    const newProvider = e.target.value;
+                    const defaultModel = AI_MODELS[newProvider]?.[0]?.value || "gpt-4o-mini";
+                    setForm((curr) => curr ? { ...curr, ai_provider: newProvider, ai_model: defaultModel } : curr);
+                  }}
+                  disabled={isSaving}
+                  className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3 text-body-sm text-on-surface focus:border-primary outline-none"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="xai">Grok (xAI)</option>
+                  <option value="anthropic">Claude (Anthropic)</option>
+                  <option value="kimi">Kimi (Moonshot)</option>
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-on-surface relative">
+                API Key
+                <div className="relative mt-2">
+                  <input
+                    aria-label="API key"
+                    type={showApiKey ? "text" : "password"}
+                    autoComplete="off"
+                    placeholder={settings?.ai_configured ? "Saved key (leave blank to keep)" : "Paste your API key here"}
+                    value={form.ai_api_key}
+                    onChange={(e) => updateForm("ai_api_key", e.target.value)}
+                    disabled={isSaving}
+                    className="h-11 w-full rounded-lg border border-outline-variant bg-surface pl-3 pr-10 text-body-sm text-on-surface focus:border-primary outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-3 top-2.5 text-on-surface-variant hover:text-on-surface"
+                    aria-label={showApiKey ? "Hide API key" : "Show API key"}
+                  >
+                    {showApiKey ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </label>
+
+              <label className="text-sm font-medium text-on-surface">
+                Model
+                <select
+                  aria-label="AI model"
+                  value={form.ai_model}
+                  onChange={(e) => updateForm("ai_model", e.target.value)}
+                  disabled={isSaving}
+                  className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3 text-body-sm text-on-surface focus:border-primary outline-none"
+                >
+                  {(AI_MODELS[form.ai_provider] ?? []).map((model) => (
+                    <option key={model.value} value={model.value}>
+                      {model.label}
+                    </option>
+                  ))}
+                  {!(AI_MODELS[form.ai_provider] ?? []).some((model) => model.value === form.ai_model) && (
+                    <option value={form.ai_model}>{form.ai_model}</option>
+                  )}
+                </select>
+              </label>
+
+              <label className="text-sm font-medium text-on-surface">
+                Temperature
+                <input
+                  aria-label="Temperature"
+                  type="number"
+                  min="0"
+                  max="2"
+                  step="0.1"
+                  value={form.ai_temperature}
+                  onChange={(e) => updateForm("ai_temperature", e.target.value)}
+                  disabled={isSaving}
+                  className="mt-2 h-11 w-full rounded-lg border border-outline-variant bg-surface px-3 text-body-sm text-on-surface focus:border-primary outline-none"
+                />
+              </label>
+            </div>
+
+            {/* Test Connection Button & Status */}
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-outline-variant px-5 py-3 bg-surface-container-low/50">
+              <div className="flex items-center gap-2">
+                <span className="text-body-sm text-on-surface-variant">
+                  Verify your API key before saving:
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void testConnection()}
+                disabled={isTesting || isSaving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-4 text-body-sm font-medium text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
+              >
+                {isTesting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Testing connection…
+                  </>
+                ) : (
+                  "Test Connection"
+                )}
+              </button>
             </div>
             <ToggleRow id="settings-ai-streaming" label="Streaming responses" description="Show responses as they arrive when supported by the provider." checked={form.ai_streaming} onChange={(value) => updateForm("ai_streaming", value)} disabled={isSaving} />
             <ToggleRow

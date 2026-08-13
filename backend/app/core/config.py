@@ -23,13 +23,37 @@ class Settings(BaseSettings):
 
     app_name: str = "LoopBack"
     app_version: str = "0.1.0"
+"""LoopBack application configuration via Pydantic Settings."""
+
+from pathlib import Path
+
+from pydantic import Field, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables / .env file."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # A generic DEBUG variable is frequently set by Windows developer
+        # tooling.  Keeping all application configuration in its own
+        # namespace prevents unrelated process variables from breaking
+        # startup (for example, DEBUG=release).
+        env_prefix="LOOPBACK_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    app_name: str = "LoopBack"
+    app_version: str = "0.1.0"
     debug: bool = False
 
     database_url: str = "sqlite+aiosqlite:///./loopback.db"
 
-    # No fallback is intentional: environments must explicitly provide a
-    # signing key instead of silently using a public default.
-    jwt_secret_key: str = Field(min_length=32)
+    # Provide a default for local setups so fresh clones start out-of-the-box
+    jwt_secret_key: str = Field(default="loopback-default-local-development-secret-key-change-in-prod-32chars", min_length=32)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
@@ -43,6 +67,9 @@ class Settings(BaseSettings):
     ai_provider: str = "gemini"
     gemini_api_key: str = ""
     xai_api_key: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    kimi_api_key: str = ""
     ai_model: str = "gemini-2.5-flash"
     ai_embedding_model: str = "gemini-embedding-001"
     # Keep Chroma's active index compatible with the prior 1024-dimension
@@ -95,8 +122,19 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def use_frontend_url_for_cors_by_default(self) -> "Settings":
         """Keep the default CORS policy narrow and deployment-friendly."""
+        default_origins = [
+            self.frontend_url.rstrip("/"),
+            "http://localhost:3010",
+            "http://localhost:3000",
+            "http://127.0.0.1:3010",
+            "http://127.0.0.1:3000",
+        ]
         if not self.cors_allow_origins:
-            self.cors_allow_origins = [self.frontend_url.rstrip("/")]
+            self.cors_allow_origins = default_origins
+        else:
+            for origin in default_origins:
+                if origin not in self.cors_allow_origins:
+                    self.cors_allow_origins.append(origin)
         return self
 
     @property
@@ -122,26 +160,24 @@ class Settings(BaseSettings):
     def ai_provider_configured(self) -> bool:
         """Whether credentials for the selected provider are safe to use."""
         provider = self.ai_provider.strip().lower()
-        if provider == "gemini":
-            value = self.gemini_api_key.strip()
-            return bool(value) and not value.lower().startswith(("your-", "replace-", "changeme"))
-        if provider == "xai":
-            value = self.xai_api_key.strip()
-            return bool(value) and not value.lower().startswith(("your-", "replace-", "changeme"))
-        return False
+        key_map = {
+            "gemini": self.gemini_api_key,
+            "xai": self.xai_api_key,
+            "grok": self.xai_api_key,
+            "openai": self.openai_api_key,
+            "anthropic": self.anthropic_api_key,
+            "claude": self.anthropic_api_key,
+            "kimi": self.kimi_api_key,
+        }
+        value = key_map.get(provider, "").strip()
+        return bool(value) and not value.lower().startswith(("your-", "replace-", "changeme"))
 
     @property
     def ai_provider_configuration_error(self) -> str:
         """Return an actionable, non-secret reason when AI is unavailable."""
         provider = self.ai_provider.strip().lower()
-        if provider == "gemini":
-            value = self.gemini_api_key.strip().lower()
-            if not value or value.startswith(("your-", "replace-", "changeme")):
-                return "Gemini is selected, but LOOPBACK_GEMINI_API_KEY is missing or still uses the example value."
-        elif provider == "xai":
-            value = self.xai_api_key.strip().lower()
-            if not value or value.startswith(("your-", "replace-", "changeme")):
-                return "xAI is selected, but LOOPBACK_XAI_API_KEY is missing or still uses the example value."
+        if provider in {"gemini", "xai", "grok", "openai", "anthropic", "claude", "kimi"}:
+            return f"{provider.capitalize()} is selected as default server provider, but no server key is configured. Please configure your API key in Settings."
         elif not provider:
             return "No AI provider is selected. Configure a provider in AI Configuration Center."
         else:

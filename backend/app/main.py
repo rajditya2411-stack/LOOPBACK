@@ -69,9 +69,21 @@ app = FastAPI(
     redoc_url="/redoc" if settings.debug else None,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_allow_origins,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 @app.middleware("http")
 async def csrf_protection_middleware(request: Request, call_next):
     """Require a matching CSRF header for cookie-authenticated API writes."""
+    if request.method == "OPTIONS":
+        return await call_next(request)
     exempt_paths = {
         "/api/auth/login",
         "/api/auth/register",
@@ -92,6 +104,8 @@ async def csrf_protection_middleware(request: Request, call_next):
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     """Attach a request id and return JSON for unexpected failures."""
+    if request.method == "OPTIONS":
+        return await call_next(request)
     import logging
     import time
     from uuid import uuid4
@@ -117,18 +131,10 @@ async def request_logging_middleware(request: Request, call_next):
     )
     return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
-
 from app.api.tasks import router as tasks_router
 from app.api.goals import router as goals_router
 from app.api.memory import router as memory_router

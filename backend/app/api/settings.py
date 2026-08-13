@@ -77,6 +77,11 @@ async def update_settings(
     settings = await _get_or_create_settings(db, current_user.id)
 
     update_data = data.model_dump(exclude_unset=True)
+    if "ai_api_key" in update_data:
+        if update_data["ai_api_key"] == "configured" or not update_data["ai_api_key"].strip():
+            # Retain existing API key if placeholder or empty string was sent
+            del update_data["ai_api_key"]
+
     memory_was_disabled = settings.ai_memory_enabled is False
     for field, value in update_data.items():
         setattr(settings, field, value)

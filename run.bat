@@ -1,6 +1,5 @@
 @echo off
 set "ROOT=%~dp0"
-set "BACKEND_PYTHON=%ROOT%backend\.venv\Scripts\python.exe"
 set "BACKEND_PORT_FILE=%ROOT%backend\backend-port.txt"
 set "FRONTEND_ENV_FILE=%ROOT%frontend\.env.local"
 
@@ -8,6 +7,21 @@ echo =======================================
 echo        Starting LoopBack Workspace
 echo =======================================
 echo.
+
+if not exist "%ROOT%backend\.venv\Scripts\python.exe" (
+    echo [Setup] Creating Python virtual environment in backend\.venv...
+    python -m venv "%ROOT%backend\.venv"
+    echo [Setup] Installing backend dependencies...
+    "%ROOT%backend\.venv\Scripts\python.exe" -m pip install -r "%ROOT%backend\requirements.txt"
+)
+
+if not exist "%ROOT%frontend\node_modules" (
+    echo [Setup] Installing frontend npm dependencies...
+    pushd "%ROOT%frontend" && npm install && popd
+)
+
+set "BACKEND_PYTHON=%ROOT%backend\.venv\Scripts\python.exe"
+if not exist "%BACKEND_PYTHON%" set "BACKEND_PYTHON=python"
 
 echo [1/2] Starting Backend (FastAPI)...
 if exist "%BACKEND_PORT_FILE%" del "%BACKEND_PORT_FILE%"
@@ -40,13 +54,13 @@ echo.
 echo =======================================
 echo LoopBack is now starting up!
 echo.
-echo - Frontend running at: http://localhost:3000
+echo - Frontend running at: http://localhost:3010
 if not "%BACKEND_PORT%"=="" echo - Backend API running at: http://localhost:%BACKEND_PORT%
 echo.
 echo (Two new terminal windows have been opened for the logs)
 echo =======================================
 echo.
-echo Opening browser to http://localhost:3000...
-start http://localhost:3000
+echo Opening browser to http://localhost:3010...
+start http://localhost:3010
 :done
 pause

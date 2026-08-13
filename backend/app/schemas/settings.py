@@ -28,7 +28,7 @@ class UserSettingsUpdate(BaseModel):
 
     theme: str | None = Field(None, pattern="^(light|dark|system)$")
     language: str | None = Field(None, max_length=10)
-    ai_provider: str | None = Field(None, pattern="^(openai|gemini|xai|anthropic|kimi)$")
+    ai_provider: str | None = Field(None, pattern="^(openai|gemini|xai|grok|anthropic|claude|kimi)$")
     ai_api_key: str | None = Field(None, max_length=500)
     ai_model: str | None = None
     ai_temperature: str | None = None

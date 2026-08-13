@@ -70,5 +70,80 @@ export default function AnalyticsPage() {
     <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{metrics.map((metric) => { const Icon = metric.icon; return <div key={metric.label} className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-5"><div className="flex items-center justify-between"><p className="text-label-sm text-on-surface-variant">{metric.label}</p><Icon size={18} className="text-primary" /></div><p className="mt-3 text-display-lg-mobile text-on-surface">{metric.value}</p><p className="mt-1 text-body-sm text-on-surface-variant">{metric.helper}</p></div>; })}</section>
     <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]"><div className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><div className="flex items-center justify-between"><div><p className="text-label-sm text-on-surface-variant">Completion trend</p><h2 className="mt-1 text-headline-md text-on-surface">Tasks finished this week</h2></div><TrendIcon size={20} className={trendIsNegative ? "text-error" : "text-primary"} /></div><div className="mt-7 flex h-48 items-end gap-3">{analytics.daily_completions.map((day) => <div key={day.date} className="flex h-full flex-1 flex-col items-center justify-end gap-2"><span className="text-xs text-on-surface-variant">{day.completed || ""}</span><div className="w-full rounded-t-lg bg-primary transition-all" style={{ height: `${Math.max(day.completed ? 10 : 2, (day.completed / maxDaily) * 100)}%` }} title={`${day.completed} tasks completed`} /><span className="text-xs text-on-surface-variant">{formatDay(day.date)}</span></div>)}</div><div className="mt-5 space-y-2">{analytics.trends.map((item) => <p key={item.label} className="text-body-sm text-on-surface-variant"><span className="font-medium text-on-surface">{item.label}:</span> {item.detail}</p>)}</div></div><div className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><p className="text-label-sm text-on-surface-variant">Productive hours</p><h2 className="mt-1 text-headline-md text-on-surface">Recorded work activity</h2><p className="mt-2 text-body-sm text-on-surface-variant">{analytics.productive_hours_confidence} confidence · UTC</p>{analytics.productive_hours.length ? <div className="mt-5 space-y-3">{analytics.productive_hours.map((entry) => <div key={entry.hour} className="flex items-center justify-between rounded-xl bg-surface-container-low px-4 py-3"><span className="text-body-md text-on-surface">{formatHour(entry.hour)}</span><span className="text-right text-body-sm text-on-surface-variant">{entry.activity_count} activity events<br />{entry.completed} completed</span></div>)}</div> : <p className="mt-5 text-body-md text-on-surface-variant">Add or update work, chat, documents, or memories to build a cautious activity-time estimate.</p>}</div></section>
     <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"><div className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><div className="flex items-center gap-2"><Activity size={18} className="text-primary" /><p className="text-label-sm text-on-surface-variant">Behavioral signals</p></div><h2 className="mt-1 text-headline-md text-on-surface">What the workspace supports</h2><div className="mt-5 space-y-3">{analytics.behavioral_insights.map((insight) => <div key={insight.id} className="rounded-xl border border-outline-variant bg-surface-container-low p-4"><p className="text-body-md font-medium text-on-surface">{insight.title}</p><p className="mt-1 text-body-sm text-on-surface-variant">{insight.detail}</p>{insight.evidence.map((evidence) => <Link key={evidence.label} href={evidence.action_url} className="mt-3 block text-body-sm text-primary hover:underline">{evidence.label}: {evidence.detail}</Link>)}</div>)}</div><p className="mt-4 text-body-sm text-on-surface-variant">{analytics.data_coverage}</p></div><div className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><p className="text-label-sm text-on-surface-variant">Attention needed</p><h2 className="mt-1 text-headline-md text-on-surface">Planning gaps</h2><div className="mt-5 space-y-3"><p className="rounded-xl bg-surface-container-low p-3 text-body-sm text-on-surface">{analytics.tasks_without_deadlines} open task{analytics.tasks_without_deadlines === 1 ? "" : "s"} without a deadline</p><p className="rounded-xl bg-surface-container-low p-3 text-body-sm text-on-surface">{analytics.goals_without_deadlines} active goal{analytics.goals_without_deadlines === 1 ? "" : "s"} without a target date</p></div><div className="mt-7 flex items-center gap-2"><Sparkles size={18} className="text-primary" /><p className="text-label-sm text-on-surface-variant">LoopBack recommendations</p></div><h2 className="mt-1 text-headline-md text-on-surface">Next best moves</h2><div className="mt-5 space-y-3">{analytics.recommendations.map((recommendation) => <Link key={recommendation.title} href={recommendation.action_url} className="block rounded-xl border border-outline-variant bg-surface-container-low p-4 hover:bg-surface-container"><p className="text-body-md font-medium text-on-surface">{recommendation.title}</p><p className="mt-1 text-body-sm text-on-surface-variant">{recommendation.detail}</p></Link>)}</div></div></section>
+
+    {/* Knowledge Profile & Document Active Recall Tracking */}
+    {profile && (
+      <section className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-label-sm text-on-surface-variant uppercase tracking-wider font-medium">Knowledge & Recall Profile</p>
+            <h2 className="mt-1 text-headline-md text-on-surface">Active Recall Understanding</h2>
+          </div>
+          <div className="flex items-center gap-4 text-right">
+            <div>
+              <p className="text-display-lg-mobile text-primary font-semibold">{profile.learning_streak}d</p>
+              <p className="text-body-sm text-on-surface-variant">Streak</p>
+            </div>
+            <div>
+              <p className="text-display-lg-mobile text-on-surface font-semibold">{profile.average_score}%</p>
+              <p className="text-body-sm text-on-surface-variant">Avg Score</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          {/* Topic Mastery Heatmap */}
+          <div className="rounded-xl border border-outline-variant bg-surface-container-low p-5">
+            <h3 className="text-body-md font-semibold text-on-surface">Topic Mastery</h3>
+            {profile.knowledge_heatmap.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {profile.knowledge_heatmap.map((item) => (
+                  <div key={item.topic} className="space-y-1">
+                    <div className="flex justify-between text-body-sm text-on-surface">
+                      <span className="font-medium">{item.topic}</span>
+                      <span>{Math.round(item.score)}% ({item.attempts} attempts)</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-surface-container-highest overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          item.score >= 80 ? "bg-secondary" : item.score >= 60 ? "bg-primary" : "bg-tertiary"
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(5, item.score))}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-body-sm text-on-surface-variant">
+                No topic mastery data yet. Open a document and click "Start Active Recall" to test your understanding!
+              </p>
+            )}
+          </div>
+
+          {/* Strengths & Weaknesses / Misconceptions */}
+          <div className="rounded-xl border border-outline-variant bg-surface-container-low p-5 space-y-4">
+            <div>
+              <h3 className="text-body-md font-semibold text-on-surface text-secondary">Strong Topics</h3>
+              <p className="mt-1 text-body-sm text-on-surface-variant">
+                {profile.strong_topics.length > 0 ? profile.strong_topics.join(", ") : "Building understanding profile..."}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-body-md font-semibold text-on-surface text-tertiary">Topics Needing Revision</h3>
+              <p className="mt-1 text-body-sm text-on-surface-variant">
+                {profile.weak_topics.length > 0 ? profile.weak_topics.join(", ") : "No declining topics identified."}
+              </p>
+            </div>
+            <div>
+              <h3 className="text-body-md font-semibold text-on-surface">Misunderstood Concepts</h3>
+              <p className="mt-1 text-body-sm text-on-surface-variant">
+                {profile.misunderstood_concepts.length > 0 ? profile.misunderstood_concepts.join(", ") : "None detected in recent explanations."}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    )}
   </div>;
 }

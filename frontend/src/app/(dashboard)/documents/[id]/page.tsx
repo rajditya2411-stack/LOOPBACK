@@ -60,10 +60,15 @@ export default function DocumentDetailPage() {
   const [explanation, setExplanation] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isStudying, setIsStudying] = useState(false);
+  const [history, setHistory] = useState<Feedback[]>([]);
 
   const loadDocument = useCallback(async () => {
-    const data = await api.get<DocumentDetail>(`/documents/${params.id}`);
+    const [data, pastSessions] = await Promise.all([
+      api.get<DocumentDetail>(`/documents/${params.id}`),
+      api.get<Feedback[]>(`/learning/documents/${params.id}/sessions`).catch(() => []),
+    ]);
     setDocument(data);
+    setHistory(pastSessions);
   }, [params.id]);
 
   useEffect(() => {
@@ -114,9 +119,15 @@ export default function DocumentDetailPage() {
   const submitExplanation = async () => {
     if (!study || explanation.trim().length < 20) return;
     setIsStudying(true); setError("");
-    try { setFeedback(await api.post<Feedback>(`/learning/sessions/${study.session_id}/explanation`, { explanation })); }
-    catch (err) { setError(err instanceof Error ? err.message : "Could not evaluate explanation."); }
-    finally { setIsStudying(false); }
+    try {
+      const fb = await api.post<Feedback>(`/learning/sessions/${study.session_id}/explanation`, { explanation });
+      setFeedback(fb);
+      setHistory((prev) => [fb, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not evaluate explanation.");
+    } finally {
+      setIsStudying(false);
+    }
   };
 
   if (isLoading) return <div className="py-16 text-center text-body-md text-on-surface-variant">Loading document...</div>;
@@ -132,7 +143,29 @@ export default function DocumentDetailPage() {
       {error && <p role="alert" className="rounded-lg border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">{error}</p>}
       {document.status === "failed" && <section className="rounded-[20px] border border-error/30 bg-error-container p-5 text-on-error-container"><p className="flex items-center gap-2 font-medium"><AlertTriangle size={18} /> Processing failed</p><p className="mt-2 text-body-sm">{document.processing_error || "The file could not be processed. Retry after checking that it is readable."}</p></section>}
       {["pending", "processing"].includes(document.status) && <section className="rounded-[20px] border border-primary/30 bg-primary-container/20 p-5 text-body-md text-on-primary-container">Processing is underway. This page updates automatically when the extracted information is ready.</section>}
-      {document.status === "completed" && <><section className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Pages</p><p className="mt-1 text-title-lg font-medium text-on-surface">{document.page_count ?? "-"}</p></div><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Words</p><p className="mt-1 text-title-lg font-medium text-on-surface">{document.word_count ?? "-"}</p></div><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Study</p><button type="button" onClick={() => void startStudy()} disabled={isStudying} className="mt-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-60">{isStudying ? "Preparing..." : "Start active recall"}</button></div></section>{study && <section className="rounded-[20px] border border-primary/30 bg-primary-container/20 p-6"><p className="text-label-md text-on-primary-container">Active recall · {study.topic}</p><h2 className="mt-2 text-headline-sm text-on-primary-container">{study.prompt}</h2><textarea aria-label="Your explanation" value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="Explain the topic in your own words..." className="mt-4 min-h-36 w-full rounded-lg border border-outline-variant bg-surface p-3 text-sm" />{!feedback && <button type="button" onClick={() => void submitExplanation()} disabled={isStudying || explanation.trim().length < 20} className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-60">{isStudying ? "Evaluating..." : "Evaluate my understanding"}</button>}{feedback && <div className="mt-5 space-y-3 text-sm text-on-surface"><p className="text-2xl font-semibold">Understanding score: {Math.round(feedback.score)}/100</p><p>{feedback.feedback}</p><p><strong>Strengths:</strong> {feedback.strengths.join(", ") || "Keep building clear explanations."}</p><p><strong>Missing concepts:</strong> {feedback.missing_concepts.join(", ") || "None identified."}</p><p><strong>Misconceptions:</strong> {feedback.misconceptions.join(", ") || "None identified."}</p><p><strong>Next revision:</strong> {feedback.revision_recommendation}</p></div>}</section>}<section className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><h2 className="text-headline-sm text-on-surface">Extracted information preview</h2>{document.summary && <p className="mt-3 whitespace-pre-wrap break-words text-body-md text-on-surface-variant">{document.summary}</p>}{document.preview_chunks.length > 0 && <div className="mt-5 space-y-3">{document.preview_chunks.map((chunk) => <article key={chunk.id} className="rounded-lg border border-outline-variant bg-surface-container-low p-4"><p className="text-label-sm text-on-surface-variant">Excerpt {chunk.chunk_index + 1}{chunk.page_number ? ` · Page ${chunk.page_number}` : ""}</p><p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-on-surface">{chunk.content}</p></article>)}</div>}</section></>}
+      {document.status === "completed" && <><section className="grid gap-3 sm:grid-cols-3"><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Pages</p><p className="mt-1 text-title-lg font-medium text-on-surface">{document.page_count ?? "-"}</p></div><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Words</p><p className="mt-1 text-title-lg font-medium text-on-surface">{document.word_count ?? "-"}</p></div><div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-4"><p className="text-body-sm text-on-surface-variant">Study</p><button type="button" onClick={() => void startStudy()} disabled={isStudying} className="mt-1 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-on-primary disabled:opacity-60">{isStudying ? "Preparing..." : "Start active recall"}</button></div></section>{study && <section className="rounded-[20px] border border-primary/30 bg-primary-container/20 p-6"><p className="text-label-md text-on-primary-container">Active recall · {study.topic}</p><h2 className="mt-2 text-headline-sm text-on-primary-container">{study.prompt}</h2><textarea aria-label="Your explanation" value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="Explain the topic in your own words..." className="mt-4 min-h-36 w-full rounded-lg border border-outline-variant bg-surface p-3 text-sm" />{!feedback && <button type="button" onClick={() => void submitExplanation()} disabled={isStudying || explanation.trim().length < 20} className="mt-3 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-on-primary disabled:opacity-60">{isStudying ? "Evaluating..." : "Evaluate my understanding"}</button>}{feedback && <div className="mt-5 space-y-3 text-sm text-on-surface"><p className="text-2xl font-semibold">Understanding score: {Math.round(feedback.score)}/100</p><p>{feedback.feedback}</p><p><strong>Strengths:</strong> {feedback.strengths.join(", ") || "Keep building clear explanations."}</p><p><strong>Missing concepts:</strong> {feedback.missing_concepts.join(", ") || "None identified."}</p><p><strong>Misconceptions:</strong> {feedback.misconceptions.join(", ") || "None identified."}</p><p><strong>Next revision:</strong> {feedback.revision_recommendation}</p></div>}</section>}
+
+      {history.length > 0 && (
+        <section className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6">
+          <h2 className="text-headline-sm text-on-surface">Study Session History ({history.length})</h2>
+          <div className="mt-4 space-y-4">
+            {history.map((item, idx) => (
+              <div key={item.session_id || idx} className="rounded-xl border border-outline-variant bg-surface-container-low p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-body-md text-on-surface">Attempt #{history.length - idx}</span>
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-sm font-bold text-primary">{Math.round(item.score)}/100</span>
+                </div>
+                <p className="text-body-sm text-on-surface-variant">{item.feedback}</p>
+                {item.missing_concepts.length > 0 && (
+                  <p className="text-xs text-on-surface-variant"><strong className="text-on-surface">Missing:</strong> {item.missing_concepts.join(", ")}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="rounded-[20px] border border-outline-variant bg-surface-container-lowest p-6"><h2 className="text-headline-sm text-on-surface">Extracted information preview</h2>{document.summary && <p className="mt-3 whitespace-pre-wrap break-words text-body-md text-on-surface-variant">{document.summary}</p>}{document.preview_chunks.length > 0 && <div className="mt-5 space-y-3">{document.preview_chunks.map((chunk) => <article key={chunk.id} className="rounded-lg border border-outline-variant bg-surface-container-low p-4"><p className="text-label-sm text-on-surface-variant">Excerpt {chunk.chunk_index + 1}{chunk.page_number ? ` · Page ${chunk.page_number}` : ""}</p><p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-on-surface">{chunk.content}</p></article>)}</div>}</section></>}
     </div>
   );
 }
