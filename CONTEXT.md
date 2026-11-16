@@ -282,24 +282,35 @@ Workspaces function as **isolated project containers** directly equivalent to **
 4. **Workspace Custom Instructions / Persona:**
    - Workspaces store custom project-level instructions (e.g., *"Act as a patient Math professor. Always format mathematical formulas using KaTeX LaTeX notation"*).
    - Injected dynamically into system prompts during chat turns within that workspace.
-5. **Phase 1 & Phase 2 Implementation Status (COMPLETED):**
-   - Added `workspace_id` to `Chat`, `Document`, and `Memory` models, and `custom_instructions` to `Workspace`.
-   - Applied Alembic migration `b4e8c1a9d0f2_add_workspace_projects_and_scoped_rag.py`.
-   - Updated `document_service.py` with `allowed_document_ids` for strict post-filtering and ChromaDB candidates filtering.
-   - Updated `memory_service.py` to support global (`workspace_id IS NULL`) vs workspace-specific memory lookups and storage.
-   - Updated `workspace_context_service.py` to filter tasks, goals, memories, and documents strictly by active workspace.
-   - Updated `chat_service.py` to automatically detect workspace, scope retrieval, inject workspace persona instructions, and tag auto-extracted memories with `workspace_id`.
-   - Added REST API query filters: `GET /api/chats?workspace_id=...`, `GET /api/documents?workspace_id=...`, `GET /api/memory?scope=global|workspace&workspace_id=...`.
-   - 55 automated backend tests passing with 0 failures; Next.js frontend compiles cleanly with 0 TypeScript errors.
+5. **Implementation Status (ALL PHASES COMPLETED):**
+   - **Phase 1 (Data Models & DB Migration):** Added `workspace_id` to `Chat`, `Document`, and `Memory` models, and `custom_instructions` to `Workspace`. Applied Alembic migration `b4e8c1a9d0f2_add_workspace_projects_and_scoped_rag.py`.
+   - **Phase 2 (Scoped Retrieval & AI Persona Engine):**
+     * Updated `document_service.py` with `allowed_document_ids` for strict post-filtering and vector candidate isolation.
+     * Updated `memory_service.py` to support global (`workspace_id IS NULL`) vs workspace-specific memory lookups and storage.
+     * Updated `workspace_context_service.py` to filter tasks, goals, memories, and documents strictly by active workspace.
+     * Updated `chat_service.py` to automatically detect workspace, scope retrieval, inject workspace persona instructions (`Workspace Guidelines & Persona`), and tag auto-extracted memories with `workspace_id`.
+     * Added REST API query filters: `GET /api/chats?workspace_id=...`, `GET /api/documents?workspace_id=...`, `GET /api/memory?scope=global|workspace&workspace_id=...`.
+   - **Phase 3 (Frontend Chat Experience):**
+     * Added **Study Project Selector Dropdown** directly into `/chat` sub-rail header allowing instant switching between course projects and global vault inquiries.
+     * Added dynamic connected notes indicator in the sub-rail (`Connected Notes: X Notes Scoped` or general AI mode).
+     * Top header displays live grounding status (`✓ Grounded in [Workspace] (X files)` or `General Knowledge Mode`).
+     * Creating a new chat automatically binds it to the selected project workspace.
+   - **Phase 4 (Document Library & Dual Memory Workbench):**
+     * Added **Project Scope Filter** in `/documents` (`Current Project Notes` vs `All Vault Documents`).
+     * Drag-and-drop / file upload auto-associates uploaded files with the active workspace.
+     * Document Inspector allows viewing and reassigning files across workspace projects.
+     * Added **Dual-Option Memory Tabs** in Cognitive Memory:
+       1. **Global Memory:** Core facts and preferences remembered universally across all workspaces.
+       2. **Workspace Memory & Persona:** Includes dedicated **AI Persona & Custom Instructions Editor** (`custom_instructions` with instant save) and a workspace-isolated memories list.
+     * Added **AI Persona & Instructions Editor** to `/workspaces` modal and detail view.
+   - **Phase 5 (Verification & Automated Testing):**
+     * 55 automated backend tests passing (`pytest backend/tests/`).
+     * Next.js production build (`npm run build`) compiles with zero errors across all 19 routes.
 6. **Core Benefits:**
    - **Zero Cross-Contamination:** Eliminates hallucinations and incorrect citations from unrelated courses or projects.
    - **Performance & Efficiency:** Minimizes vector search space, reduces token footprint, and significantly speeds up local retrieval.
    - **Clean Mental Model:** Students, law practitioners, and accounting firms have clean, compartmentalized silos for each course or client engagement.
    - **Turnkey Packaging:** Exporting a workspace creates a self-contained `.zip` or on-demand PDF report containing only the relevant chats, notes, and milestones for that subject.
-7. **Upcoming UI Integration Points (Phase 3 & 4):**
-   - **Chat Topbar Workspace Switcher:** Quick indicator/dropdown in `/chat` showing the active workspace and allowing instant switching between project contexts.
-   - **Document Library Workspace Filter:** Defaulting `/documents` view to the active workspace with a toggle to view "All Vault Documents".
-   - **Knowledge & Memory Dual Tabs:** Split view in `/memory` for "Global Memory (Across All Workspaces)" and "Workspace Instructions & Project Memories".
 
 ---
 

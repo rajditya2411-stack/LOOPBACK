@@ -10,6 +10,7 @@ interface Workspace {
   id: string;
   name: string;
   description: string | null;
+  custom_instructions?: string | null;
   owner_id: string;
   member_count: number;
   resource_count: number;
@@ -49,7 +50,13 @@ export default function WorkspacesPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWsName, setNewWsName] = useState("");
   const [newWsDesc, setNewWsDesc] = useState("");
+  const [newWsCustomInstructions, setNewWsCustomInstructions] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  // Custom Instructions & Persona State
+  const [editInstructions, setEditInstructions] = useState("");
+  const [isUpdatingInstructions, setIsUpdatingInstructions] = useState(false);
+  const [instructionsNotice, setInstructionsNotice] = useState<string | null>(null);
 
   // Item Picker Modal
   const [showPickerModal, setShowPickerModal] = useState(false);
@@ -148,6 +155,13 @@ export default function WorkspacesPage() {
   }, []);
 
   useEffect(() => {
+    const active = workspaces.find((w) => w.id === selectedWorkspaceId);
+    if (active) {
+      setEditInstructions(active.custom_instructions || "");
+    }
+  }, [selectedWorkspaceId, workspaces]);
+
+  useEffect(() => {
     if (selectedWorkspaceId) {
       loadWorkspaceResources(selectedWorkspaceId);
     } else {
@@ -187,11 +201,13 @@ export default function WorkspacesPage() {
       const newWs = await api.post<Workspace>("/workspaces", {
         name: newWsName.trim(),
         description: newWsDesc.trim() || null,
+        custom_instructions: newWsCustomInstructions.trim() || null,
       });
       setWorkspaces((prev) => [newWs, ...prev]);
       setSelectedWorkspaceId(newWs.id);
       setNewWsName("");
       setNewWsDesc("");
+      setNewWsCustomInstructions("");
       setShowCreateModal(false);
       showToast(`Created workspace "${newWs.name}"`);
 
@@ -202,6 +218,27 @@ export default function WorkspacesPage() {
       showToast("Error creating workspace");
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Update Workspace AI Custom Instructions
+  const handleUpdateInstructions = async () => {
+    if (!selectedWorkspaceId) return;
+    try {
+      setIsUpdatingInstructions(true);
+      const updated = await api.put<Workspace>(`/workspaces/${selectedWorkspaceId}`, {
+        custom_instructions: editInstructions.trim() || null,
+      });
+      setWorkspaces((prev) =>
+        prev.map((w) => (w.id === selectedWorkspaceId ? { ...w, ...updated } : w))
+      );
+      setInstructionsNotice("Project AI instructions saved!");
+      setTimeout(() => setInstructionsNotice(null), 3000);
+    } catch (err) {
+      console.error("Failed to update instructions:", err);
+      showToast("Failed to save instructions");
+    } finally {
+      setIsUpdatingInstructions(false);
     }
   };
 
@@ -865,6 +902,44 @@ export default function WorkspacesPage() {
                     </div>
                   </div>
 
+                  {/* Project Persona & AI Instructions Card */}
+                  <div className="p-space-sm bg-surface-container-low rounded-lg border border-outline-variant/20 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[17px] text-primary">psychology</span>
+                        <span className="font-label-md text-label-md font-semibold text-on-surface">
+                          Project AI Instructions (Gem / Custom GPT Persona)
+                        </span>
+                      </div>
+                      {instructionsNotice && (
+                        <span className="font-mono-sm text-mono-sm text-emerald-600 font-medium">
+                          ✓ {instructionsNotice}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-body-sm text-body-sm text-secondary">
+                      Custom instructions and domain guidelines for AI conversations within this workspace (e.g. format equations in LaTeX, adopt a Socratic tutoring tone, focus on corporate finance standards).
+                    </p>
+                    <textarea
+                      rows={2}
+                      value={editInstructions}
+                      onChange={(e) => setEditInstructions(e.target.value)}
+                      placeholder="e.g. Format all mathematical equations in LaTeX notation. Guide the student step by step with proofs."
+                      className="w-full px-3 py-1.5 rounded-lg bg-surface-container-lowest text-on-surface font-body-sm text-body-sm outline-none border border-outline-variant/30 focus:border-primary transition-all"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleUpdateInstructions}
+                        disabled={isUpdatingInstructions}
+                        className="flex items-center gap-1 px-3 py-1 rounded bg-surface-container-high hover:bg-surface-container-highest text-on-surface font-label-sm text-label-sm transition-colors border border-outline-variant/25 cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">save</span>
+                        <span>{isUpdatingInstructions ? "Saving..." : "Save AI Persona"}</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {exportNotice && (
                     <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 font-mono-sm text-mono-sm text-primary flex items-center gap-2">
                       <span className="material-symbols-outlined text-[16px]">info</span>
@@ -1020,6 +1095,17 @@ export default function WorkspacesPage() {
                     value={newWsDesc}
                     onChange={(e) => setNewWsDesc(e.target.value)}
                     placeholder="Brief description of this course or research focus..."
+                    className="w-full px-3 py-2 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md outline-none border border-outline-variant/30 focus:border-primary resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="font-label-sm text-label-sm text-secondary">AI Instructions &amp; Persona (Optional)</label>
+                  <textarea
+                    rows={2}
+                    value={newWsCustomInstructions}
+                    onChange={(e) => setNewWsCustomInstructions(e.target.value)}
+                    placeholder="e.g. In this workspace, format all equations using LaTeX and explain step by step..."
                     className="w-full px-3 py-2 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md outline-none border border-outline-variant/30 focus:border-primary resize-none"
                   />
                 </div>

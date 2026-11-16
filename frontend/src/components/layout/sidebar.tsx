@@ -2,6 +2,7 @@
 
 import { useAuthStore } from "@/store/auth-store";
 import { useUIStore } from "@/store/ui-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { api } from "@/lib/api";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -29,29 +30,20 @@ export function Sidebar() {
   const { isSidebarOpen, toggleSidebar } = useUIStore();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [currentWorkspace, setCurrentWorkspace] = useState("Personal Sandbox");
-  const [workspaceList, setWorkspaceList] = useState<WorkspaceMeta[]>([]);
+  const { workspaces, activeWorkspace, fetchWorkspaces, setActiveWorkspace } = useWorkspaceStore();
+  const currentWorkspace = activeWorkspace?.name || "Personal Workspace";
+  const workspaceList = workspaces;
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
-      api.get<WorkspaceMeta[]>("/workspaces")
-        .then((data) => {
-          if (Array.isArray(data) && data.length > 0) {
-            setWorkspaceList(data);
-            const active = data.find((w) => w.is_active) || data[0];
-            setCurrentWorkspace(active.name);
-          }
-        })
-        .catch(() => {});
+      fetchWorkspaces();
     }
-  }, [user, pathname]);
+  }, [user, fetchWorkspaces]);
 
-  const handleSwitchWorkspace = async (ws: WorkspaceMeta) => {
+  const handleSwitchWorkspace = async (ws: { id: string; name: string }) => {
     try {
-      await api.put("/workspaces/active", { workspace_id: ws.id });
-      setCurrentWorkspace(ws.name);
-      setWorkspaceList((prev) => prev.map((w) => ({ ...w, is_active: w.id === ws.id })));
+      await setActiveWorkspace(ws.id);
       setWorkspaceMenuOpen(false);
     } catch (err) {
       console.error("Failed to switch workspace:", err);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, ChangeEvent, FormEvent } from "react";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { api } from "@/lib/api";
 
 type ActiveTab = "doc-lib" | "cog-mem";
@@ -14,6 +15,7 @@ interface DocumentItem {
   file_size?: number;
   status: string;
   created_at?: string;
+  workspace_id?: string | null;
   selected?: boolean;
 }
 
@@ -24,6 +26,7 @@ interface MemoryItem {
   source: string;
   review_status: string;
   is_pinned: boolean;
+  workspace_id?: string | null;
   relevance_score?: number;
   created_at: string;
 }
@@ -31,20 +34,32 @@ interface MemoryItem {
 export default function KnowledgePage() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("doc-lib");
 
-  // Document Library state
+  const { workspaces, activeWorkspace, activeWorkspaceId, fetchWorkspaces, setActiveWorkspace, updateWorkspaceInstructions } = useWorkspaceStore();
+
+  // Document Library state & Scoping
   const [docs, setDocs] = useState<DocumentItem[]>([]);
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
   const [docSearch, setDocSearch] = useState("");
   const [formatFilter, setFormatFilter] = useState<FormatFilter>("all");
+  const [docWorkspaceFilter, setDocWorkspaceFilter] = useState<string>("active");
   const [isUploading, setIsUploading] = useState(false);
   const [docsLoading, setDocsLoading] = useState(true);
 
-  // Cognitive Memory state
+  const effectiveDocWs = docWorkspaceFilter === "all"
+    ? null
+    : (docWorkspaceFilter === "active" ? activeWorkspace : workspaces.find((w) => w.id === docWorkspaceFilter) || activeWorkspace);
+
+  // Cognitive Memory state & Scoping (Global vs. Workspace specific)
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [selectedMemId, setSelectedMemId] = useState<string | null>(null);
   const [memSearch, setMemSearch] = useState("");
   const [memFilter, setMemFilter] = useState<MemoryFilter>("all");
   const [memsLoading, setMemsLoading] = useState(true);
+  const [memoryScopeTab, setMemoryScopeTab] = useState<"global" | "workspace">("global");
+  const [selectedMemoryWsId, setSelectedMemoryWsId] = useState<string | null>(null);
+  const [personaInstructions, setPersonaInstructions] = useState<string>("");
+  const [isSavingPersona, setIsSavingPersona] = useState(false);
+  const [personaSuccessMsg, setPersonaSuccessMsg] = useState<string | null>(null);
 
   // Modals
   const [showAddMemModal, setShowAddMemModal] = useState(false);
@@ -54,15 +69,40 @@ export default function KnowledgePage() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch Documents
+  // Load workspaces on mount
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
+
+  // Sync selected memory workspace ID
+  useEffect(() => {
+    if (activeWorkspaceId && !selectedMemoryWsId) {
+      setSelectedMemoryWsId(activeWorkspaceId);
+    }
+  }, [activeWorkspaceId, selectedMemoryWsId]);
+
+  // Sync persona instructions when selected workspace changes
+  useEffect(() => {
+    const targetWs = workspaces.find((w) => w.id === (selectedMemoryWsId || activeWorkspaceId));
+    if (targetWs) {
+      setPersonaInstructions(targetWs.custom_instructions || "");
+    }
+  }, [selectedMemoryWsId, activeWorkspaceId, workspaces]);
+
+  // Fetch Documents (scoped by active project or all)
   const fetchDocuments = async () => {
     try {
       setDocsLoading(true);
-      const data = await api.get<DocumentItem[]>("/documents");
+      const url = effectiveDocWs?.id ? `/documents?workspace_id=${effectiveDocWs.id}` : "/documents";
+      const data = await api.get<DocumentItem[]>(url);
       if (Array.isArray(data)) {
         setDocs(data);
-        if (data.length > 0 && !selectedDocId) {
-          setSelectedDocId(data[0].id);
+        if (data.length > 0) {
+          if (!selectedDocId || !data.some((d) => d.id === selectedDocId)) {
+            setSelectedDocId(data[0].id);
+          }
+        } else {
+          setSelectedDocId(null);
         }
       }
     } catch (err) {
@@ -72,15 +112,28 @@ export default function KnowledgePage() {
     }
   };
 
-  // Fetch Memories
+  // Fetch Memories (global vs workspace scoped)
   const fetchMemories = async () => {
     try {
       setMemsLoading(true);
-      const data = await api.get<MemoryItem[]>("/memory");
+      let url = "/memory";
+      if (memoryScopeTab === "global") {
+        url = "/memory?scope=global";
+      } else if (memoryScopeTab === "workspace") {
+        const targetWsId = selectedMemoryWsId || activeWorkspaceId;
+        if (targetWsId) {
+          url = `/memory?workspace_id=${targetWsId}`;
+        }
+      }
+      const data = await api.get<MemoryItem[]>(url);
       if (Array.isArray(data)) {
         setMemories(data);
-        if (data.length > 0 && !selectedMemId) {
-          setSelectedMemId(data[0].id);
+        if (data.length > 0) {
+          if (!selectedMemId || !data.some((m) => m.id === selectedMemId)) {
+            setSelectedMemId(data[0].id);
+          }
+        } else {
+          setSelectedMemId(null);
         }
       }
     } catch (err) {
@@ -92,9 +145,13 @@ export default function KnowledgePage() {
 
   useEffect(() => {
     fetchDocuments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveDocWs?.id]);
+
+  useEffect(() => {
     fetchMemories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [memoryScopeTab, selectedMemoryWsId, activeWorkspaceId]);
 
   // Upload Document
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -106,6 +163,9 @@ export default function KnowledgePage() {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("title", file.name);
+      if (effectiveDocWs?.id) {
+        formData.append("workspace_id", effectiveDocWs.id);
+      }
       const created = await api.upload<DocumentItem>("/documents/upload", formData);
       setDocs((prev) => [created, ...prev]);
       setSelectedDocId(created.id);
@@ -114,6 +174,35 @@ export default function KnowledgePage() {
       alert("Failed to upload document to vector index.");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Save Workspace Custom Persona Instructions
+  const handleSavePersona = async () => {
+    const targetWsId = selectedMemoryWsId || activeWorkspaceId;
+    if (!targetWsId) return;
+    try {
+      setIsSavingPersona(true);
+      await updateWorkspaceInstructions(targetWsId, personaInstructions.trim() || null);
+      setPersonaSuccessMsg("Project guidelines saved successfully!");
+      setTimeout(() => setPersonaSuccessMsg(null), 3000);
+    } catch (err) {
+      console.error("Save persona error:", err);
+      alert("Failed to save project persona guidelines.");
+    } finally {
+      setIsSavingPersona(false);
+    }
+  };
+
+  // Reassign document to workspace
+  const handleReassignDoc = async (docId: string, newWsId: string | null) => {
+    try {
+      const updated = await api.patch<DocumentItem>(`/documents/${docId}`, {
+        workspace_id: newWsId || null,
+      });
+      setDocs((prev) => prev.map((d) => (d.id === docId ? { ...d, ...updated } : d)));
+    } catch (err) {
+      console.error("Reassign doc error:", err);
     }
   };
 
@@ -137,10 +226,12 @@ export default function KnowledgePage() {
     if (!newMemContent.trim()) return;
 
     try {
+      const targetWsId = memoryScopeTab === "workspace" ? (selectedMemoryWsId || activeWorkspaceId) : null;
       const created = await api.post<MemoryItem>("/memory", {
         content: newMemContent.trim(),
         category: newMemCategory,
         is_pinned: newMemPinned,
+        workspace_id: targetWsId || undefined,
       });
       setMemories((prev) => [created, ...prev]);
       setSelectedMemId(created.id);
@@ -298,6 +389,27 @@ export default function KnowledgePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
             {/* Left Section: Document Registry & Table */}
             <div className="lg:col-span-8 flex flex-col gap-space-md">
+              {/* Project Scoping Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs bg-surface-container-lowest p-space-sm rounded-xl shadow-sm border border-outline-variant/20">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[17px] text-primary">folder_special</span>
+                  <span className="font-label-sm text-label-sm text-secondary font-medium">Project Scope:</span>
+                  <select
+                    value={docWorkspaceFilter}
+                    onChange={(e) => setDocWorkspaceFilter(e.target.value)}
+                    className="px-2.5 py-1 bg-surface-container rounded-lg font-label-sm text-label-sm text-on-surface outline-none border border-outline-variant/30 font-medium cursor-pointer"
+                  >
+                    <option value="active">Active Project ({activeWorkspace?.name || "None"})</option>
+                    <option value="all">All Vault Documents</option>
+                    {workspaces.map((ws) => (
+                      <option key={ws.id} value={ws.id}>{ws.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-mono-sm font-mono-sm text-secondary px-1">
+                  {effectiveDocWs ? `Grounded in ${effectiveDocWs.name} (${docs.length} notes)` : `All Vault (${docs.length} notes)`}
+                </div>
+              </div>
               <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm sm:items-center justify-between">
                 <div className="flex items-center gap-space-sm flex-1 max-w-md">
                   <div className="relative w-full">
@@ -539,6 +651,20 @@ export default function KnowledgePage() {
                       </div>
                     </div>
 
+                    <div className="p-2.5 rounded bg-surface-container-low flex flex-col gap-1">
+                      <span className="text-outline font-mono-sm text-mono-sm uppercase tracking-wider">Assigned Project Workspace</span>
+                      <select
+                        value={selectedDoc.workspace_id || ""}
+                        onChange={(e) => handleReassignDoc(selectedDoc.id, e.target.value || null)}
+                        className="w-full px-2 py-1.5 bg-surface-container rounded font-mono-sm text-mono-sm text-on-surface outline-none border border-outline-variant/30 cursor-pointer"
+                      >
+                        <option value="">General Vault (Unassigned)</option>
+                        {workspaces.map((ws) => (
+                          <option key={ws.id} value={ws.id}>{ws.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="flex flex-col gap-1.5">
                       <span className="font-mono-sm text-mono-sm text-outline uppercase tracking-wide">
                         Document Overview
@@ -558,9 +684,103 @@ export default function KnowledgePage() {
           </div>
         ) : (
           /* TAB 2: COGNITIVE MEMORY WORKBENCH VIEW */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
-            {/* Left Section: Memory Registry */}
-            <div className="lg:col-span-8 flex flex-col gap-space-md">
+          <div className="flex flex-col gap-space-md">
+            {/* Dual-Option Memory Tabs (Global vs Workspace Specific) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-space-sm bg-surface-container-lowest p-space-sm rounded-xl shadow-sm border border-outline-variant/20">
+              <div className="inline-flex p-0.5 bg-surface-container rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setMemoryScopeTab("global")}
+                  className={`flex items-center gap-2 px-space-md py-1.5 rounded-lg font-label-md text-label-md transition-colors cursor-pointer ${
+                    memoryScopeTab === "global"
+                      ? "bg-surface-container-lowest text-on-surface shadow-sm font-semibold"
+                      : "text-secondary hover:text-on-surface"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-primary">public</span>
+                  <span>Global Memory (Across All Workspaces)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMemoryScopeTab("workspace")}
+                  className={`flex items-center gap-2 px-space-md py-1.5 rounded-lg font-label-md text-label-md transition-colors cursor-pointer ${
+                    memoryScopeTab === "workspace"
+                      ? "bg-surface-container-lowest text-on-surface shadow-sm font-semibold"
+                      : "text-secondary hover:text-on-surface"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-primary">folder_special</span>
+                  <span>Workspace Memory &amp; Persona</span>
+                </button>
+              </div>
+
+              {memoryScopeTab === "workspace" && (
+                <div className="flex items-center gap-2">
+                  <span className="font-label-sm text-label-sm text-secondary font-medium">Target Project:</span>
+                  <select
+                    value={selectedMemoryWsId || activeWorkspaceId || ""}
+                    onChange={(e) => setSelectedMemoryWsId(e.target.value)}
+                    className="px-2.5 py-1 bg-surface-container rounded-lg font-label-sm text-label-sm text-on-surface outline-none border border-outline-variant/30 font-medium cursor-pointer"
+                  >
+                    {workspaces.map((ws) => (
+                      <option key={ws.id} value={ws.id}>{ws.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {memoryScopeTab === "workspace" ? (
+              /* Project Persona & Custom Instructions Card */
+              <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm border border-outline-variant/20 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[18px] text-primary">psychology</span>
+                    <span className="font-headline-sm text-headline-sm text-on-surface">
+                      {workspaces.find((w) => w.id === (selectedMemoryWsId || activeWorkspaceId))?.name || "Workspace"} Custom AI Persona &amp; Instructions
+                    </span>
+                  </div>
+                  {personaSuccessMsg && (
+                    <span className="font-mono-sm text-mono-sm text-emerald-600 font-medium">
+                      ✓ {personaSuccessMsg}
+                    </span>
+                  )}
+                </div>
+                <p className="font-body-sm text-body-sm text-secondary">
+                  Custom instructions and domain guidelines for AI conversations within this workspace project (e.g. format all math equations in LaTeX, adopt a Socratic tutoring tone, focus on corporate finance standards).
+                </p>
+                <textarea
+                  rows={3}
+                  value={personaInstructions}
+                  onChange={(e) => setPersonaInstructions(e.target.value)}
+                  placeholder="e.g. Act as a patient math tutor. Always format equations using LaTeX and provide step-by-step proofs."
+                  className="w-full px-3 py-2 rounded-lg bg-surface-container-low text-on-surface font-body-md text-body-md outline-none border border-outline-variant/30 focus:border-primary transition-all"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSavePersona}
+                    disabled={isSavingPersona}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-on-surface text-surface font-label-md text-label-md hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">save</span>
+                    <span>{isSavingPersona ? "Saving..." : "Save Project Persona"}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Global Memory Info Banner */
+              <div className="bg-surface-container-lowest p-space-sm px-space-md rounded-xl shadow-sm border border-outline-variant/20 flex items-center gap-2 text-secondary">
+                <span className="material-symbols-outlined text-[18px] text-primary shrink-0">public</span>
+                <span className="font-body-sm text-body-sm">
+                  Global knowledge, facts, and preferences that LoopBack AI retains universally across every workspace and inquiry.
+                </span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+              {/* Left Section: Memory Registry */}
+              <div className="lg:col-span-8 flex flex-col gap-space-md">
               <div className="bg-surface-container-lowest p-space-md rounded-xl shadow-sm flex flex-col sm:flex-row gap-space-sm sm:items-center justify-between">
                 <div className="flex items-center gap-space-sm flex-1 max-w-md">
                   <div className="relative w-full">
@@ -799,6 +1019,7 @@ export default function KnowledgePage() {
               </div>
             </div>
           </div>
+          </div>
         )}
 
         {/* Modal: Register New Memory */}
@@ -806,9 +1027,14 @@ export default function KnowledgePage() {
           <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
             <div className="bg-surface-container-lowest rounded-xl p-space-lg shadow-xl max-w-md w-full flex flex-col gap-space-md border border-outline-variant/30">
               <div className="flex items-center justify-between">
-                <h3 className="font-headline-sm text-headline-sm text-on-surface">
-                  Add Custom Rule / Preference
-                </h3>
+                <div>
+                  <h3 className="font-headline-sm text-headline-sm text-on-surface">
+                    Add Custom Rule / Preference
+                  </h3>
+                  <span className="font-mono-sm text-mono-sm text-primary">
+                    Scope: {memoryScopeTab === "workspace" ? `Project (${workspaces.find((w) => w.id === (selectedMemoryWsId || activeWorkspaceId))?.name || "Active Workspace"})` : "Global (All Workspaces)"}
+                  </span>
+                </div>
                 <button
                   onClick={() => setShowAddMemModal(false)}
                   className="p-1 text-secondary hover:text-on-surface rounded cursor-pointer"

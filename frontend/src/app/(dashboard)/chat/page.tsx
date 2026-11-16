@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/store/auth-store";
+import { useWorkspaceStore } from "@/store/workspace-store";
 import { api } from "@/lib/api";
 
 interface ChatThread {
@@ -44,6 +45,17 @@ interface ChatMessage {
 export default function ChatPage() {
   const searchParams = useSearchParams();
   const { user } = useAuthStore();
+  const { workspaces, activeWorkspace, activeWorkspaceId, fetchWorkspaces, setActiveWorkspace } = useWorkspaceStore();
+
+  const [chatWorkspaceId, setChatWorkspaceId] = useState<string>("active");
+  const [isWsDropdownOpen, setIsWsDropdownOpen] = useState(false);
+  const [scopedNotesCount, setScopedNotesCount] = useState<number | null>(null);
+
+  const wsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const effectiveWs = chatWorkspaceId === "all"
+    ? null
+    : (chatWorkspaceId === "active" ? activeWorkspace : workspaces.find((w) => w.id === chatWorkspaceId) || activeWorkspace);
 
   const [chats, setChats] = useState<ChatThread[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -61,13 +73,42 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch real chats from backend
+  // Load workspaces on mount
+  useEffect(() => {
+    fetchWorkspaces();
+  }, [fetchWorkspaces]);
+
+  // Load document count for active workspace scope
+  useEffect(() => {
+    if (effectiveWs) {
+      api.get<unknown[]>(`/documents?workspace_id=${effectiveWs.id}`)
+        .then((docs) => setScopedNotesCount(Array.isArray(docs) ? docs.length : 0))
+        .catch(() => setScopedNotesCount(0));
+    } else {
+      api.get<unknown[]>("/documents")
+        .then((docs) => setScopedNotesCount(Array.isArray(docs) ? docs.length : 0))
+        .catch(() => setScopedNotesCount(0));
+    }
+  }, [effectiveWs?.id]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) {
+        setIsWsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch real chats from backend (scoped by active project)
   const fetchChats = async () => {
     try {
-      const data = await api.get<ChatThread[]>("/chats");
+      const url = effectiveWs?.id ? `/chats?workspace_id=${effectiveWs.id}` : "/chats";
+      const data = await api.get<ChatThread[]>(url);
       setChats(data);
-      if (data.length > 0 && !activeChatId) {
-        // If query param specifies a title or milestone, check if there's a matching chat
+      if (data.length > 0) {
         const paramTitle = searchParams.get("title");
         if (paramTitle) {
           const match = data.find((c) => c.title.toLowerCase().includes(paramTitle.toLowerCase()));
@@ -77,13 +118,23 @@ export default function ChatPage() {
             return;
           }
         }
-        setActiveChatId(data[0].id);
-        loadChatMessages(data[0].id);
+        if (!activeChatId || !data.some((c) => c.id === activeChatId)) {
+          setActiveChatId(data[0].id);
+          loadChatMessages(data[0].id);
+        }
+      } else {
+        setActiveChatId(null);
+        setMessages([]);
       }
     } catch (err) {
       console.error("Failed to fetch chats:", err);
     }
   };
+
+  useEffect(() => {
+    fetchChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveWs?.id]);
 
   const loadChatMessages = async (chatId: string) => {
     try {
@@ -128,10 +179,7 @@ export default function ChatPage() {
     }
   };
 
-  useEffect(() => {
-    fetchChats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
 
   // Handle incoming query param to launch a study session
   useEffect(() => {
@@ -162,7 +210,11 @@ export default function ChatPage() {
   const handleNewInquiry = async (customTitle?: string) => {
     const title = customTitle || "New AI Study Inquiry";
     try {
-      const newChat = await api.post<ChatThread>("/chats", { title });
+      const payload: { title: string; workspace_id?: string } = { title };
+      if (effectiveWs?.id) {
+        payload.workspace_id = effectiveWs.id;
+      }
+      const newChat = await api.post<ChatThread>("/chats", payload);
       setChats((prev) => [newChat, ...prev]);
       setActiveChatId(newChat.id);
       setMessages([]);
@@ -231,9 +283,13 @@ export default function ChatPage() {
     let chatId = activeChatId;
     if (!chatId) {
       try {
-        const newChat = await api.post<ChatThread>("/chats", {
+        const payload: { title: string; workspace_id?: string } = {
           title: query.slice(0, 32),
-        });
+        };
+        if (effectiveWs?.id) {
+          payload.workspace_id = effectiveWs.id;
+        }
+        const newChat = await api.post<ChatThread>("/chats", payload);
         setChats((prev) => [newChat, ...prev]);
         chatId = newChat.id;
         setActiveChatId(newChat.id);
@@ -332,6 +388,74 @@ export default function ChatPage() {
           {/* Left Sub-Rail: Conversation History Drawer (260px) */}
           <aside className="w-[260px] shrink-0 flex flex-col bg-surface-container-low rounded-xl p-space-md shadow-sm justify-between">
             <div className="flex flex-col min-h-0">
+              {/* Workspace Project Selector (ChatGPT Projects / Gemini Gems Style) */}
+              <div className="relative mb-space-sm" ref={wsDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsWsDropdownOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-space-sm py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface transition-colors cursor-pointer text-left"
+                  title="Switch Active Study Project"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="material-symbols-outlined text-[16px] text-primary shrink-0">
+                      {effectiveWs ? "folder_special" : "public"}
+                    </span>
+                    <span className="font-label-md text-label-md font-medium truncate">
+                      {effectiveWs ? effectiveWs.name : "All Inquiries (Vault)"}
+                    </span>
+                  </div>
+                  <span className="material-symbols-outlined text-[16px] text-outline shrink-0">
+                    expand_more
+                  </span>
+                </button>
+                {isWsDropdownOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-lg py-1 z-50 max-h-60 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChatWorkspaceId("all");
+                        setIsWsDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 text-body-sm hover:bg-surface-container flex items-center justify-between cursor-pointer ${
+                        !effectiveWs ? "text-primary font-medium bg-surface-container/50" : "text-on-surface"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[15px]">public</span>
+                        <span>All Inquiries</span>
+                      </div>
+                      {!effectiveWs && <span className="material-symbols-outlined text-[14px]">check</span>}
+                    </button>
+                    <div className="border-t border-outline-variant/20 my-1"></div>
+                    <div className="px-3 py-1 font-mono-sm text-[10px] uppercase text-outline tracking-wider">
+                      Study Projects
+                    </div>
+                    {workspaces.map((ws) => (
+                      <button
+                        key={ws.id}
+                        type="button"
+                        onClick={() => {
+                          setChatWorkspaceId(ws.id);
+                          setActiveWorkspace(ws.id);
+                          setIsWsDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-1.5 text-body-sm hover:bg-surface-container flex items-center justify-between cursor-pointer ${
+                          effectiveWs?.id === ws.id ? "text-primary font-medium bg-surface-container/50" : "text-on-surface"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <span className="material-symbols-outlined text-[15px] text-primary">folder</span>
+                          <span className="truncate">{ws.name}</span>
+                        </div>
+                        {effectiveWs?.id === ws.id && (
+                          <span className="material-symbols-outlined text-[14px]">check</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* New Inquiry Button */}
               <button
                 onClick={() => handleNewInquiry()}
@@ -434,12 +558,20 @@ export default function ChatPage() {
               </div>
               <div className="flex flex-col gap-1 pt-1 font-mono-sm text-mono-sm text-secondary">
                 <div className="flex items-center justify-between">
-                  <span className="text-outline">Workspace:</span>
-                  <span className="font-medium text-on-surface truncate max-w-[120px]">Active Vault</span>
+                  <span className="text-outline">Project:</span>
+                  <span className="font-medium text-on-surface truncate max-w-[120px]">
+                    {effectiveWs ? effectiveWs.name : "All Vault"}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-outline">Connected Notes:</span>
-                  <span className="font-medium text-primary">All Indexed</span>
+                  <span className="font-medium text-primary">
+                    {scopedNotesCount !== null
+                      ? scopedNotesCount > 0
+                        ? `${scopedNotesCount} Notes Scoped`
+                        : "0 Notes (General AI)"
+                      : "Connecting..."}
+                  </span>
                 </div>
               </div>
             </div>
@@ -456,12 +588,26 @@ export default function ChatPage() {
                   </span>
                 </div>
                 <span className="font-label-sm text-label-sm text-outline">/</span>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono-sm text-mono-sm shrink-0">
-                  <span className="material-symbols-outlined text-[13px] text-primary">
-                    check_circle
-                  </span>
-                  <span>Notes Connected</span>
-                </div>
+                {effectiveWs ? (
+                  scopedNotesCount && scopedNotesCount > 0 ? (
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-primary/10 border border-primary/25 text-primary font-mono-sm text-mono-sm shrink-0">
+                      <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                      <span>Grounded in {effectiveWs.name} ({scopedNotesCount} files)</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono-sm text-mono-sm shrink-0" title="Upload notes to this workspace to enable scoped retrieval">
+                      <span className="material-symbols-outlined text-[13px] text-outline">info</span>
+                      <span>{effectiveWs.name} (General Knowledge Mode)</span>
+                    </div>
+                  )
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono-sm text-mono-sm shrink-0">
+                    <span className="material-symbols-outlined text-[13px] text-primary">
+                      check_circle
+                    </span>
+                    <span>All Vault Notes Connected</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-space-sm shrink-0">
@@ -486,15 +632,19 @@ export default function ChatPage() {
               id="chat-stream"
             >
               {messages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-64 text-secondary gap-2">
+                <div className="flex flex-col items-center justify-center h-64 text-secondary gap-2 text-center max-w-md mx-auto">
                   <span className="material-symbols-outlined text-[36px] text-primary">
                     psychology
                   </span>
                   <p className="font-body-md text-body-md text-on-surface font-medium">
-                    Session initialized.
+                    {effectiveWs ? `Study Project: ${effectiveWs.name}` : "Session initialized."}
                   </p>
                   <p className="font-mono-sm text-mono-sm text-outline">
-                    Ask any question to retrieve grounded vectors from your uploaded study materials.
+                    {effectiveWs
+                      ? scopedNotesCount && scopedNotesCount > 0
+                        ? `Strictly grounded in ${scopedNotesCount} study document${scopedNotesCount === 1 ? "" : "s"} attached to this workspace. Questions here only retrieve from this project.`
+                        : `No study documents attached to ${effectiveWs.name} yet. LoopBack AI will answer using general knowledge. Link notes in Documents or Workspaces to ground this project.`
+                      : "Ask any question to retrieve grounded excerpts from your uploaded study materials."}
                   </p>
                 </div>
               )}
