@@ -58,12 +58,32 @@ LoopBack/
 │   │   └── store/            # Zustand stores for auth, UI state, notifications, and workspaces
 │   └── package.json          # Next.js 16 (Turbopack), Tailwind CSS v4, Lucide/Material Symbols
 │
-├── ca_frontend/              # Chartered Accountant domain head (FROZEN — DO NOT TOUCH)
-├── law_frontend/             # Legal domain head (FROZEN — DO NOT TOUCH)
+├── ca_frontend/              # Chartered Accountant & Tax Advisory Head (Active Head, Port 3020)
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── (auth)/       # CA Practitioner Authentication views
+│   │   │   ├── (dashboard)/  # Practice Management views:
+│   │   │   │   ├── dashboard/page.tsx       # Practice Cockpit, statutory radar, KPI metrics
+│   │   │   │   ├── clients/page.tsx         # Client Enclaves, Entity KYC (PAN/GSTIN/CIN), Auto-Schedules
+│   │   │   │   ├── compliance/page.tsx      # Statutory Calendar (GST/TDS/ITR/ROC) & Review Kanban
+│   │   │   │   ├── audit/page.tsx           # CARO 2020 (21 clauses), Form 3CD, SA 230 tickmarks
+│   │   │   │   ├── financials/page.tsx      # Schedule III Financials & 11 Ratios (>25% variance alerts)
+│   │   │   │   ├── reconciliation/page.tsx  # 26AS/AIS vs Books matrix, Bank voucherizer, Client PBC
+│   │   │   │   ├── advisory/page.tsx        # Notice Scrutiny (DIN parser, legal reply) & Advisory AI
+│   │   │   │   ├── vault/page.tsx           # Permanent (PAF) vs Current (CAF) File Explorer
+│   │   │   │   └── settings/page.tsx        # ICAI firm credentials & BYOK provider engine
+│   │   │   ├── globals.css                  # Notion/ElevenLabs + CA Audit/Compliance tokens
+│   │   │   └── layout.tsx                   # Root layout with Material Symbols and font definitions
+│   │   ├── components/       # CA Layout (Sidebar, Header, Notifications)
+│   │   ├── lib/api.ts        # Typed fetch client with CSRF and auth headers
+│   │   └── store/            # Zustand stores for auth, UI, and client enclaves
+│   └── package.json          # Next.js 16 (Turbopack, port 3020), Tailwind CSS v4
+│
+├── law_frontend/             # Legal domain head (STAGED FOR FUTURE EXPANSION)
 └── context.md                # Persistent project context documentation (this file)
 ```
 
-> **IMPORTANT BOUNDARY RULE:** Never modify or edit files inside `ca_frontend/` or `law_frontend/`. All current work is strictly focused on `frontend/` (the Student Appliance) and `backend/`.
+> **IMPORTANT BOUNDARY RULE:** `frontend/` (Student Appliance) and `ca_frontend/` (Chartered Accountant Appliance) are active heads. `law_frontend/` is reserved for future expansion.
 
 ---
 

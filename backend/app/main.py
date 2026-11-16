@@ -161,7 +161,9 @@ app.include_router(notifications_router, prefix="/api")
 app.include_router(workspaces_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(productivity_router, prefix="/api")
+from app.api.ca import router as ca_router
 app.include_router(learning_router, prefix="/api")
+app.include_router(ca_router, prefix="/api")
 
 @app.get("/api/health", tags=["Health"])
 async def health_check() -> dict[str, str]:
