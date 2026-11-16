@@ -16,31 +16,38 @@ router = APIRouter(prefix="/memory", tags=["Memory"])
 
 @router.get("", response_model=list[MemoryRead])
 async def list_memories(
+    workspace_id: str | None = None,
+    scope: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """List all memories for the current user."""
-    result = await db.execute(
-        select(Memory).where(Memory.user_id == current_user.id).order_by(Memory.created_at.desc())
-    )
+    """List memories for current user with optional workspace or scope filtering."""
+    query = select(Memory).where(Memory.user_id == current_user.id)
+    if scope == "global":
+        query = query.where(Memory.workspace_id.is_(None))
+    elif scope == "workspace" and workspace_id:
+        query = query.where(Memory.workspace_id == workspace_id)
+    elif workspace_id:
+        query = query.where(Memory.workspace_id == workspace_id)
+    result = await db.execute(query.order_by(Memory.created_at.desc()))
     return result.scalars().all()
 
 
 @router.get("/review", response_model=list[MemoryRead])
 async def list_pending_memories(
+    workspace_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """List AI-extracted memories awaiting the user's approval."""
-    result = await db.execute(
-        select(Memory)
-        .where(
-            Memory.user_id == current_user.id,
-            Memory.source == "auto",
-            Memory.review_status == "pending",
-        )
-        .order_by(Memory.created_at.desc())
+    query = select(Memory).where(
+        Memory.user_id == current_user.id,
+        Memory.source == "auto",
+        Memory.review_status == "pending",
     )
+    if workspace_id:
+        query = query.where(Memory.workspace_id == workspace_id)
+    result = await db.execute(query.order_by(Memory.created_at.desc()))
     return result.scalars().all()
 
 @router.post("", response_model=MemoryRead, status_code=status.HTTP_201_CREATED)
@@ -53,6 +60,14 @@ async def create_memory(
     """Create a new memory."""
     memory = Memory(**data.model_dump(), user_id=current_user.id, source="manual")
     db.add(memory)
+    await db.flush()
+    if data.workspace_id:
+        from app.models.workspace import WorkspaceResource
+        db.add(WorkspaceResource(
+            workspace_id=data.workspace_id,
+            resource_type="memory",
+            resource_id=memory.id,
+        ))
     await db.commit()
     await db.refresh(memory)
     background_tasks.add_task(index_memory_by_id, memory.id)
@@ -75,6 +90,23 @@ async def update_memory(
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(memory, field, value)
+    
+    if "workspace_id" in update_data:
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import delete
+        await db.execute(
+            delete(WorkspaceResource).where(
+                WorkspaceResource.resource_type == "memory",
+                WorkspaceResource.resource_id == memory.id,
+            )
+        )
+        if memory.workspace_id:
+            db.add(WorkspaceResource(
+                workspace_id=memory.workspace_id,
+                resource_type="memory",
+                resource_id=memory.id,
+            ))
+
     memory.embedding_id = None
     await db.commit()
     await db.refresh(memory)

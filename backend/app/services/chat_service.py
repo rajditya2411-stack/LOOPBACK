@@ -101,20 +101,41 @@ def _history_payload(messages: list[Message]) -> list[dict[str, str]]:
     return selected
 
 
-async def get_user_chats(db: AsyncSession, user_id: str) -> list[Chat]:
-    """Retrieve all chats for a user, ordered by most recently updated."""
-    result = await db.execute(
-        select(Chat).where(Chat.user_id == user_id).order_by(Chat.updated_at.desc())
-    )
+async def get_user_chats(
+    db: AsyncSession, user_id: str, workspace_id: str | None = None
+) -> list[Chat]:
+    """Retrieve chats for a user, optionally filtered by workspace_id."""
+    stmt = select(Chat).where(Chat.user_id == user_id)
+    if workspace_id:
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import or_
+        wr_chat_ids = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id,
+            WorkspaceResource.resource_type == "chat",
+        )
+        stmt = stmt.where(or_(Chat.workspace_id == workspace_id, Chat.id.in_(wr_chat_ids)))
+    stmt = stmt.order_by(Chat.updated_at.desc())
+    result = await db.execute(stmt)
     return list(result.scalars().all())
 
 
-async def create_chat(db: AsyncSession, user_id: str, title: str) -> Chat:
-    """Create a new empty chat."""
-    chat = Chat(user_id=user_id, title=title.strip() or "New Chat")
+async def create_chat(
+    db: AsyncSession, user_id: str, title: str, workspace_id: str | None = None
+) -> Chat:
+    """Create a new empty chat, optionally scoped to a workspace project."""
+    chat = Chat(user_id=user_id, title=title.strip() or "New Chat", workspace_id=workspace_id)
     db.add(chat)
     await db.commit()
     await db.refresh(chat)
+    if workspace_id:
+        from app.models.workspace import WorkspaceResource
+        wr = WorkspaceResource(
+            workspace_id=workspace_id,
+            resource_type="chat",
+            resource_id=chat.id,
+        )
+        db.add(wr)
+        await db.commit()
     return chat
 
 
@@ -151,7 +172,7 @@ async def stream_chat_response(
     db: AsyncSession, user_id: str, chat_id: str, content: str, *, retry: bool = False
 ) -> AsyncGenerator[str, None]:
     """Save a turn, gather bounded context, and stream a persisted AI response."""
-    await get_chat_with_messages(db, user_id, chat_id)
+    chat = await get_chat_with_messages(db, user_id, chat_id)
     normalized_content = content.strip()
     user_message: Message | None = None
     if retry:
@@ -174,13 +195,60 @@ async def stream_chat_response(
     history = list((await db.scalars(
         select(Message).where(Message.chat_id == chat_id).order_by(Message.created_at)
     )).all())
-    # One AsyncSession must not execute these database queries concurrently.
+
+    # Resolve workspace project scoping
+    effective_workspace_id = getattr(chat, "workspace_id", None) if chat else None
+    if not effective_workspace_id and hasattr(db, "scalar"):
+        from app.models.workspace import WorkspaceResource
+        wr = await db.scalar(
+            select(WorkspaceResource.workspace_id).where(
+                WorkspaceResource.resource_type == "chat",
+                WorkspaceResource.resource_id == chat_id,
+            )
+        )
+        if wr:
+            effective_workspace_id = wr
+
+    # Workspace scoped document retrieval & custom persona
+    allowed_doc_ids: list[str] | None = None
+    workspace = None
+    if effective_workspace_id:
+        from app.models.workspace import Workspace, WorkspaceResource
+        from app.models.document import Document
+        from sqlalchemy import or_
+
+        if hasattr(db, "get"):
+            workspace = await db.get(Workspace, effective_workspace_id)
+        if hasattr(db, "scalars"):
+            ws_doc_subquery = select(WorkspaceResource.resource_id).where(
+                WorkspaceResource.workspace_id == effective_workspace_id,
+                WorkspaceResource.resource_type == "document",
+            )
+            doc_ids_res = await db.scalars(
+                select(Document.id).where(
+                    Document.user_id == user_id,
+                    or_(
+                        Document.workspace_id == effective_workspace_id,
+                        Document.id.in_(ws_doc_subquery),
+                    ),
+                )
+            )
+            allowed_doc_ids = list(set(doc_ids_res.all()))
+
+    # Document matches post-filtered or scoped by allowed_doc_ids
     document_matches = await search_user_documents(
-        db, user_id, content, limit=settings.rag_max_chunks
+        db, user_id, content, limit=settings.rag_max_chunks, allowed_document_ids=allowed_doc_ids
     )
-    workspace_context = await build_workspace_context(db, user_id, content)
+    workspace_context = await build_workspace_context(
+        db, user_id, content, effective_workspace_id
+    )
     document_context, citations = _document_context(document_matches)
     prompt_messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if workspace and workspace.custom_instructions and workspace.custom_instructions.strip():
+        prompt_messages.append({
+            "role": "system",
+            "content": f"Workspace Guidelines & Persona ({workspace.name}):\n{workspace.custom_instructions.strip()}",
+        })
     if workspace_context.content:
         prompt_messages.append({"role": "system", "content": workspace_context.content})
     if document_context:
@@ -246,6 +314,7 @@ async def stream_chat_response(
                         source_message_id=assistant_message.id,
                         user_content=user_message.content,
                         assistant_content=assistant_message.content,
+                        workspace_id=effective_workspace_id,
                     ))
             if not cancelled:
                 yield _sse("done", {"completed": completed})

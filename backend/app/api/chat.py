@@ -32,11 +32,12 @@ router = APIRouter(prefix="/chats", tags=["Chat"])
 
 @router.get("", response_model=list[ChatRead])
 async def list_chats(
+    workspace_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """List all chats for the current user."""
-    return await get_user_chats(db, current_user.id)
+    """List all chats for the current user, optionally filtered by workspace_id."""
+    return await get_user_chats(db, current_user.id, workspace_id=workspace_id)
 
 
 @router.post("", response_model=ChatRead, status_code=status.HTTP_201_CREATED)
@@ -45,8 +46,8 @@ async def start_chat(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """Create a new chat conversation."""
-    return await create_chat(db, current_user.id, data.title)
+    """Create a new chat conversation, optionally assigned to a workspace project."""
+    return await create_chat(db, current_user.id, data.title, workspace_id=data.workspace_id)
 
 
 @router.get("/{chat_id}", response_model=ChatWithMessages)
@@ -66,10 +67,31 @@ async def update_chat(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """Rename a user-owned chat conversation."""
-    if data.title is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A chat title is required")
-    return await rename_chat(db, current_user.id, chat_id, data.title)
+    """Rename a user-owned chat conversation or update its workspace association."""
+    if data.title is None and "workspace_id" not in data.model_fields_set:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A chat title or workspace_id is required")
+    chat = await get_chat_with_messages(db, current_user.id, chat_id)
+    if data.title is not None:
+        chat.title = data.title.strip() or "New Chat"
+    if "workspace_id" in data.model_fields_set:
+        chat.workspace_id = data.workspace_id
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import delete
+        await db.execute(
+            delete(WorkspaceResource).where(
+                WorkspaceResource.resource_type == "chat",
+                WorkspaceResource.resource_id == chat.id,
+            )
+        )
+        if data.workspace_id:
+            db.add(WorkspaceResource(
+                workspace_id=data.workspace_id,
+                resource_type="chat",
+                resource_id=chat.id,
+            ))
+    await db.commit()
+    await db.refresh(chat)
+    return chat
 
 
 @router.delete("/{chat_id}", response_model=MessageResponse)

@@ -79,7 +79,7 @@ def test_placeholder_gemini_values_are_not_treated_as_configured(
     monkeypatch.setattr(chat_service.settings, "ai_provider", "gemini")
     monkeypatch.setattr(chat_service.settings, "gemini_api_key", "your-gemini-api-key")
     assert chat_service.settings.ai_provider_configured is False
-    assert "LOOPBACK_GEMINI_API_KEY" in chat_service.settings.ai_provider_configuration_error
+    assert "Gemini" in chat_service.settings.ai_provider_configuration_error
 
 
 

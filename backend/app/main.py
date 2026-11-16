@@ -120,6 +120,10 @@ async def request_logging_middleware(request: Request, call_next):
             status_code=500,
             content={"detail": "Internal server error", "request_id": request_id},
         )
+        origin = request.headers.get("origin")
+        if origin:
+            response.headers["access-control-allow-origin"] = origin
+            response.headers["access-control-allow-credentials"] = "true"
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     response.headers["x-request-id"] = request_id
     response.headers["x-content-type-options"] = "nosniff"

@@ -55,9 +55,10 @@ def _fit(parts: list[str]) -> WorkspaceContext:
 
 
 async def build_workspace_context(
-    db: AsyncSession, user_id: str, query: str
+    db: AsyncSession, user_id: str, query: str, workspace_id: str | None = None
 ) -> WorkspaceContext:
     """Gather a concise, relevance-first snapshot of workspace data and document titles."""
+    from app.models.workspace import WorkspaceResource
     terms = _query_terms(query)
     matching_task = or_(
         *(or_(Task.title.ilike(f"%{term}%"), Task.description.ilike(f"%{term}%")) for term in terms)
@@ -68,6 +69,16 @@ async def build_workspace_context(
 
     task_filters = [Task.user_id == user_id, Task.status != "done"]
     goal_filters = [Goal.user_id == user_id, Goal.status == "active"]
+    if workspace_id:
+        ws_task_ids = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id, WorkspaceResource.resource_type == "task"
+        )
+        ws_goal_ids = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id, WorkspaceResource.resource_type == "goal"
+        )
+        task_filters.append(Task.id.in_(ws_task_ids))
+        goal_filters.append(Goal.id.in_(ws_goal_ids))
+
     if matching_task is not None:
         task_filters.append(matching_task)
     if matching_goal is not None:
@@ -79,10 +90,16 @@ async def build_workspace_context(
     goals = list((await db.scalars(
         select(Goal).where(*goal_filters).order_by(Goal.target_date.is_(None), Goal.target_date, Goal.updated_at.desc()).limit(3)
     )).all())
-    memories = await search_user_memories(db, user_id, query, limit=5)
+    memories = await search_user_memories(db, user_id, query, limit=5, workspace_id=workspace_id)
+    doc_filters = [Document.user_id == user_id, Document.status == "completed"]
+    if workspace_id:
+        ws_doc_ids = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id, WorkspaceResource.resource_type == "document"
+        )
+        doc_filters.append(or_(Document.workspace_id == workspace_id, Document.id.in_(ws_doc_ids)))
     documents = list((await db.scalars(
         select(Document)
-        .where(Document.user_id == user_id, Document.status == "completed")
+        .where(*doc_filters)
         .order_by(Document.updated_at.desc())
         .limit(20)
     )).all())

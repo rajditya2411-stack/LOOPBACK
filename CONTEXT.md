@@ -276,15 +276,30 @@ Workspaces function as **isolated project containers** directly equivalent to **
 2. **Strictly Scoped RAG Retrieval:**
    - When asking a question inside the *Math* workspace, vector search and context retrieval strictly query **only** the documents attached to that specific workspace.
    - Physical or unrelated documents (e.g. *Physics Mechanics*, *Biochemistry*) are completely ignored during retrieval.
-3. **Core Benefits:**
+3. **Dual-Tier Memory System (Global vs. Workspace-Scoped):**
+   - **Global Memory (`workspace_id = None`):** Memories that the AI retains across all workspaces (e.g. general student study habits, overarching preferences, career goals).
+   - **Workspace-Specific Memory (`workspace_id = <uuid>`):** Targeted instructions, formulas, course requirements, or syllabus specifics retained exclusively within that individual workspace.
+4. **Workspace Custom Instructions / Persona:**
+   - Workspaces store custom project-level instructions (e.g., *"Act as a patient Math professor. Always format mathematical formulas using KaTeX LaTeX notation"*).
+   - Injected dynamically into system prompts during chat turns within that workspace.
+5. **Phase 1 & Phase 2 Implementation Status (COMPLETED):**
+   - Added `workspace_id` to `Chat`, `Document`, and `Memory` models, and `custom_instructions` to `Workspace`.
+   - Applied Alembic migration `b4e8c1a9d0f2_add_workspace_projects_and_scoped_rag.py`.
+   - Updated `document_service.py` with `allowed_document_ids` for strict post-filtering and ChromaDB candidates filtering.
+   - Updated `memory_service.py` to support global (`workspace_id IS NULL`) vs workspace-specific memory lookups and storage.
+   - Updated `workspace_context_service.py` to filter tasks, goals, memories, and documents strictly by active workspace.
+   - Updated `chat_service.py` to automatically detect workspace, scope retrieval, inject workspace persona instructions, and tag auto-extracted memories with `workspace_id`.
+   - Added REST API query filters: `GET /api/chats?workspace_id=...`, `GET /api/documents?workspace_id=...`, `GET /api/memory?scope=global|workspace&workspace_id=...`.
+   - 55 automated backend tests passing with 0 failures; Next.js frontend compiles cleanly with 0 TypeScript errors.
+6. **Core Benefits:**
    - **Zero Cross-Contamination:** Eliminates hallucinations and incorrect citations from unrelated courses or projects.
    - **Performance & Efficiency:** Minimizes vector search space, reduces token footprint, and significantly speeds up local retrieval.
    - **Clean Mental Model:** Students, law practitioners, and accounting firms have clean, compartmentalized silos for each course or client engagement.
    - **Turnkey Packaging:** Exporting a workspace creates a self-contained `.zip` or on-demand PDF report containing only the relevant chats, notes, and milestones for that subject.
-4. **Planned UI Integration Points:**
+7. **Upcoming UI Integration Points (Phase 3 & 4):**
    - **Chat Topbar Workspace Switcher:** Quick indicator/dropdown in `/chat` showing the active workspace and allowing instant switching between project contexts.
    - **Document Library Workspace Filter:** Defaulting `/documents` view to the active workspace with a toggle to view "All Vault Documents".
-   - **Workspace Custom Instructions:** Optional per-workspace system prompt overrides (e.g., *"In this Math workspace, always output proofs step-by-step using LaTeX notation"*).
+   - **Knowledge & Memory Dual Tabs:** Split view in `/memory` for "Global Memory (Across All Workspaces)" and "Workspace Instructions & Project Memories".
 
 ---
 

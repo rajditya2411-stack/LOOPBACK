@@ -347,7 +347,7 @@ async def reconcile_document_indexes() -> None:
 
 
 async def search_user_documents(
-    db: AsyncSession, user_id: str, query: str, limit: int = 5
+    db: AsyncSession, user_id: str, query: str, limit: int = 5, allowed_document_ids: list[str] | None = None
 ) -> list[DocumentSearchResult]:
     """Search ChromaDB with a strict user metadata filter; fall back to SQL text search."""
     query = query.strip()
@@ -356,6 +356,8 @@ async def search_user_documents(
     limit = max(1, min(limit, 50))
     terms = [term for term in re.findall(r"\w+", query.lower()) if term]
     if not terms:
+        return []
+    if allowed_document_ids is not None and len(allowed_document_ids) == 0:
         return []
     collection = _collection()
     embeddings = await _ai_embeddings([query], task_type="RETRIEVAL_QUERY")
@@ -387,6 +389,8 @@ async def search_user_documents(
                 if not metadata or not content or not metadata.get("document_id"):
                     continue
                 document_id = str(metadata["document_id"])
+                if allowed_document_ids is not None and document_id not in allowed_document_ids:
+                    continue
                 score = 1 - float(distance)
                 key = (document_id, int(metadata.get("chunk_index", 0)))
                 if (
@@ -425,6 +429,7 @@ async def search_user_documents(
         .where(
             Document.user_id == user_id,
             Document.status == "completed",
+            *((Document.id.in_(allowed_document_ids),) if allowed_document_ids is not None else ()),
             or_(*(
                 condition
                 for term in terms

@@ -17,6 +17,7 @@ class MemoryCreate(BaseModel):
         pattern=MEMORY_CATEGORIES,
     )
     is_pinned: bool = False
+    workspace_id: str | None = None
 
 
 class MemoryRead(BaseModel):
@@ -30,6 +31,7 @@ class MemoryRead(BaseModel):
     review_status: str
     is_pinned: bool
     relevance_score: float
+    workspace_id: str | None = None
     source_chat_id: str | None = None
     source_message_id: str | None = None
     confidence: float | None = None
@@ -48,3 +50,4 @@ class MemoryUpdate(BaseModel):
         None, pattern=MEMORY_CATEGORIES
     )
     is_pinned: bool | None = None
+    workspace_id: str | None = None

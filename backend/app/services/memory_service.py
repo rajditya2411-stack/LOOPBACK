@@ -173,7 +173,7 @@ async def reindex_user_memories(user_id: str) -> int:
 
 
 async def search_user_memories(
-    db: AsyncSession, user_id: str, query: str, limit: int = 5
+    db: AsyncSession, user_id: str, query: str, limit: int = 5, workspace_id: str | None = None
 ) -> list[MemorySearchResult]:
     """Return semantically ranked memories with a user-scoped SQL fallback."""
     limit = max(1, min(limit, 20))
@@ -205,18 +205,22 @@ async def search_user_memories(
     terms = _query_terms(query)
     has_vector_candidates = bool(candidates)
     if has_vector_candidates:
+        mem_scope = (or_(Memory.workspace_id == workspace_id, Memory.workspace_id.is_(None)) if workspace_id else Memory.workspace_id.is_(None))
         rows = list((await db.scalars(
             select(Memory).where(
                 Memory.user_id == user_id,
                 Memory.review_status == "approved",
                 Memory.id.in_(candidates),
+                mem_scope,
             )
         )).all())
     else:
+        mem_scope = (or_(Memory.workspace_id == workspace_id, Memory.workspace_id.is_(None)) if workspace_id else Memory.workspace_id.is_(None))
         rows = list((await db.scalars(
             select(Memory).where(
                 Memory.user_id == user_id,
                 Memory.review_status == "approved",
+                mem_scope,
             ).order_by(Memory.is_pinned.desc(), Memory.updated_at.desc()).limit(250)
         )).all())
         candidates = {
@@ -224,11 +228,13 @@ async def search_user_memories(
             for memory in rows
         }
 
+    mem_scope = (or_(Memory.workspace_id == workspace_id, Memory.workspace_id.is_(None)) if workspace_id else Memory.workspace_id.is_(None))
     pinned = list((await db.scalars(
         select(Memory).where(
             Memory.user_id == user_id,
             Memory.review_status == "approved",
             Memory.is_pinned.is_(True),
+            mem_scope,
         )
     )).all())
     memories = {memory.id: memory for memory in rows}
@@ -295,7 +301,12 @@ def _parse_extraction(raw: str) -> ExtractionResponse:
 
 
 async def extract_memories_from_turn(
-    user_id: str, chat_id: str, source_message_id: str, user_content: str, assistant_content: str
+    user_id: str,
+    chat_id: str,
+    source_message_id: str,
+    user_content: str,
+    assistant_content: str,
+    workspace_id: str | None = None,
 ) -> None:
     """Extract durable memories asynchronously after a successful chat response."""
     if not settings.ai_provider_configured:
@@ -379,9 +390,17 @@ ASSISTANT: {assistant_content}"""
                 source_message_id=source_message_id,
                 confidence=candidate.confidence,
                 review_status="pending",
+                workspace_id=workspace_id,
             )
             db.add(memory)
             await db.flush()
+            if workspace_id:
+                from app.models.workspace import WorkspaceResource
+                db.add(WorkspaceResource(
+                    workspace_id=workspace_id,
+                    resource_type="memory",
+                    resource_id=memory.id,
+                ))
             created_ids.append(memory.id)
             existing.add(normalised)
         await db.commit()

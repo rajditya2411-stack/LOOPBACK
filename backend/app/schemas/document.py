@@ -18,6 +18,7 @@ class DocumentRead(BaseModel):
     page_count: int | None = None
     word_count: int | None = None
     processing_error: str | None = None
+    workspace_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -34,6 +35,7 @@ class DocumentUpdate(BaseModel):
     """Schema for updating a document."""
 
     title: str | None = Field(None, max_length=255)
+    workspace_id: str | None = None
 
 
 class DocumentChunkRead(BaseModel):

@@ -3,7 +3,7 @@
 import logging
 import uuid
 from typing import Any
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile, File, Form, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
@@ -14,7 +14,7 @@ from app.database.session import get_db
 from app.models.user import User
 from app.models.document import Document
 from app.models.document import DocumentChunk
-from app.schemas.document import DocumentDetailRead, DocumentRead, DocumentSearchResult
+from app.schemas.document import DocumentDetailRead, DocumentRead, DocumentSearchResult, DocumentUpdate
 from app.services.document_service import (
     process_document,
     remove_document_from_index,
@@ -28,23 +28,32 @@ ALLOWED_EXTENSIONS = {"pdf", "txt", "md", "png", "jpg", "jpeg"}
 
 @router.get("", response_model=list[DocumentRead])
 async def list_documents(
+    workspace_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """List all documents for the current user."""
-    result = await db.execute(
-        select(Document).where(Document.user_id == current_user.id).order_by(Document.created_at.desc())
-    )
+    """List all documents for the current user, optionally filtered by workspace_id."""
+    query = select(Document).where(Document.user_id == current_user.id)
+    if workspace_id:
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import or_
+        ws_doc_ids = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id,
+            WorkspaceResource.resource_type == "document"
+        )
+        query = query.where(or_(Document.workspace_id == workspace_id, Document.id.in_(ws_doc_ids)))
+    result = await db.execute(query.order_by(Document.created_at.desc()))
     return result.scalars().all()
 
 @router.post("/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
 async def upload_document(
     file: UploadFile = File(...),
+    workspace_id: str | None = Form(None),
     background_tasks: BackgroundTasks = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """Upload a new document."""
+    """Upload a new document, optionally associated with a workspace project."""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -68,6 +77,8 @@ async def upload_document(
         file_path.unlink(missing_ok=True)
         raise
     
+    ws_id = workspace_id.strip() if (workspace_id and workspace_id.strip()) else None
+
     # Create database record
     document = Document(
         user_id=current_user.id,
@@ -76,9 +87,18 @@ async def upload_document(
         file_type=file_extension,
         file_size=bytes_written,
         status="pending",
+        workspace_id=ws_id,
     )
     
     db.add(document)
+    await db.flush()
+    if ws_id:
+        from app.models.workspace import WorkspaceResource
+        db.add(WorkspaceResource(
+            workspace_id=ws_id,
+            resource_type="document",
+            resource_id=document.id,
+        ))
     await db.commit()
     await db.refresh(document)
     logger.info(
@@ -97,13 +117,73 @@ async def upload_document(
 async def search_documents(
     query: str,
     limit: int = 5,
+    workspace_id: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[DocumentSearchResult]:
-    """Return user-scoped semantic document matches for a query."""
+    """Return user-scoped semantic document matches for a query, optionally scoped to a workspace."""
     if not query.strip():
         return []
-    return await search_user_documents(db, current_user.id, query, min(max(limit, 1), 20))
+    allowed_doc_ids: list[str] | None = None
+    if workspace_id:
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import or_
+        ws_doc_subquery = select(WorkspaceResource.resource_id).where(
+            WorkspaceResource.workspace_id == workspace_id,
+            WorkspaceResource.resource_type == "document",
+        )
+        doc_ids_res = await db.scalars(
+            select(Document.id).where(
+                Document.user_id == current_user.id,
+                or_(
+                    Document.workspace_id == workspace_id,
+                    Document.id.in_(ws_doc_subquery),
+                ),
+            )
+        )
+        allowed_doc_ids = list(set(doc_ids_res.all()))
+    return await search_user_documents(
+        db, current_user.id, query, min(max(limit, 1), 20), allowed_document_ids=allowed_doc_ids
+    )
+
+
+@router.patch("/{document_id}", response_model=DocumentRead)
+async def update_document(
+    document_id: str,
+    data: DocumentUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Update a user-owned document's title or workspace assignment."""
+    document = await db.scalar(
+        select(Document).where(Document.id == document_id, Document.user_id == current_user.id)
+    )
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(document, field, value)
+
+    if "workspace_id" in update_data:
+        from app.models.workspace import WorkspaceResource
+        from sqlalchemy import delete
+        await db.execute(
+            delete(WorkspaceResource).where(
+                WorkspaceResource.resource_type == "document",
+                WorkspaceResource.resource_id == document.id,
+            )
+        )
+        if document.workspace_id:
+            db.add(WorkspaceResource(
+                workspace_id=document.workspace_id,
+                resource_type="document",
+                resource_id=document.id,
+            ))
+
+    await db.commit()
+    await db.refresh(document)
+    return document
 
 
 @router.get("/{document_id}", response_model=DocumentDetailRead)

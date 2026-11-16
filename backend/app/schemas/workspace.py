@@ -10,6 +10,7 @@ class WorkspaceCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
+    custom_instructions: str | None = None
 
 
 class WorkspaceRead(BaseModel):
@@ -18,6 +19,7 @@ class WorkspaceRead(BaseModel):
     id: str
     name: str
     description: str | None = None
+    custom_instructions: str | None = None
     owner_id: str
     member_count: int = 0
     resource_count: int = 0
@@ -34,6 +36,7 @@ class WorkspaceUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
+    custom_instructions: str | None = None
 
 
 class WorkspaceMemberRead(BaseModel):

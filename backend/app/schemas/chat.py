@@ -20,6 +20,7 @@ class ChatCreate(BaseModel):
     """Schema for creating a new chat."""
 
     title: str = Field(default="New Chat", max_length=255)
+    workspace_id: str | None = None
 
 
 class ChatRead(BaseModel):
@@ -28,6 +29,7 @@ class ChatRead(BaseModel):
     id: str
     user_id: str
     title: str
+    workspace_id: str | None = None
     created_at: datetime
     updated_at: datetime
     message_count: int = 0
@@ -40,6 +42,7 @@ class ChatUpdate(BaseModel):
     """Schema for updating a chat."""
 
     title: str | None = Field(None, max_length=255)
+    workspace_id: str | None = None
 
 
 class MessageCreate(BaseModel):
@@ -70,6 +73,7 @@ class ChatWithMessages(BaseModel):
     id: str
     user_id: str
     title: str
+    workspace_id: str | None = None
     created_at: datetime
     updated_at: datetime
     messages: list[MessageRead] = []
