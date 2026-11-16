@@ -257,12 +257,14 @@ async def _productivity_context(
         )
     except TimeoutError:
         logger.warning("Productivity memory retrieval timed out; using recent memory fallback", exc_info=True)
+        await db.rollback()
         ranked_memories = list((await db.scalars(
             select(Memory).where(Memory.user_id == user_id, Memory.review_status == "approved")
             .order_by(Memory.is_pinned.desc(), Memory.updated_at.desc()).limit(5)
         )).all())
     except Exception:
         logger.exception("Productivity memory retrieval failed; using recent memory fallback")
+        await db.rollback()
         ranked_memories = list((await db.scalars(
             select(Memory).where(Memory.user_id == user_id, Memory.review_status == "approved")
             .order_by(Memory.is_pinned.desc(), Memory.updated_at.desc()).limit(5)

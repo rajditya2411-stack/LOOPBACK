@@ -13,7 +13,7 @@ const staticActions: StaticAction[] = [
   { label: "Search", description: "Open the full search page", icon: Search, href: "/search" },
   { label: "Dashboard", description: "Open your workspace overview", icon: LayoutDashboard, href: "/dashboard" },
   { label: "AI Chat", description: "Jump back into a conversation", icon: MessageSquare, href: "/chat" },
-  { label: "Documents", description: "Browse uploaded files and RAG content", icon: FileText, href: "/documents" },
+  { label: "Documents", description: "Browse study notes, slides, and syllabus files", icon: FileText, href: "/documents" },
   { label: "Tasks", description: "Review your task board", icon: CheckSquare, href: "/tasks" },
   { label: "Goals", description: "Track goal progress", icon: Target, href: "/goals" },
   { label: "Analytics", description: "View productivity insights", icon: BarChart3, href: "/analytics" },

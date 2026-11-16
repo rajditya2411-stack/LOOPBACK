@@ -88,12 +88,16 @@ class WorkspaceResourceCreate(BaseModel):
     resource_id: str
 
 
+class WorkspaceResourceBatchCreate(BaseModel):
+    resources: list[WorkspaceResourceCreate]
+
+
 class WorkspaceResourceRead(BaseModel):
     id: str
     workspace_id: str
     resource_type: str
     resource_id: str
-    title: str
+    title: str = ""
     subtitle: str | None = None
     added_by_id: str
     created_at: datetime
@@ -106,3 +110,11 @@ class WorkspaceAvailableResource(BaseModel):
     resource_id: str
     title: str
     subtitle: str | None = None
+
+
+class WorkspaceGeneratePdfRequest(BaseModel):
+    title: str = "Workspace Dossier"
+    subtitle: str | None = None
+    mode: str = Field(default="verbatim", pattern="^(verbatim|summary)$")
+    custom_prompt: str | None = None
+    resource_ids: list[str] = []

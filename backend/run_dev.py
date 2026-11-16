@@ -15,6 +15,7 @@ from app.core.windows_asyncio import configure_windows_asyncio
 configure_windows_asyncio()
 
 ROOT = Path(__file__).resolve().parent
+os.chdir(ROOT)
 PORT_FILE = ROOT / "backend-port.txt"
 
 
