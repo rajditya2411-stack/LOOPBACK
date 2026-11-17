@@ -27,9 +27,31 @@ const DEFAULT_RATIOS = [
   { name: "Return on Investment (ROI)", current_year: 14.5, previous_year: 11.2, unit: "percentage" },
 ];
 
+function computeScheduleIIIRatios(items: typeof DEFAULT_RATIOS): RatioItem[] {
+  return items.map((item) => {
+    const prev = item.previous_year;
+    const curr = item.current_year;
+    const var_pct = prev === 0 ? (curr > 0 ? 100.0 : 0.0) : Number((((curr - prev) / Math.abs(prev)) * 100).toFixed(2));
+    const is_statutory = Math.abs(var_pct) >= 25.0;
+    const direction = var_pct > 0 ? "increase" : "decrease";
+    const suggested_note = is_statutory
+      ? `The ${item.name} experienced a ${Math.abs(var_pct)}% ${direction} from ${prev} to ${curr}. As per Schedule III Part I of Companies Act, 2013, explanation is provided: The variation is primarily attributable to operational volume shifts, working capital adjustments, and market conditions.`
+      : null;
+    return {
+      name: item.name,
+      current_year: curr,
+      previous_year: prev,
+      variance_percentage: var_pct,
+      is_statutory_variance: is_statutory,
+      status: is_statutory ? "Requires Mandatory Disclosure Note" : "Within Normal Threshold",
+      suggested_note,
+    };
+  });
+}
+
 export default function FinancialsPage() {
   const [ratioData, setRatioData] = useState(DEFAULT_RATIOS);
-  const [results, setResults] = useState<RatioItem[]>([]);
+  const [results, setResults] = useState<RatioItem[]>(() => computeScheduleIIIRatios(DEFAULT_RATIOS));
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
@@ -43,26 +65,7 @@ export default function FinancialsPage() {
     } catch (err) {
       console.warn("Backend unavailable, computing Schedule III ratios client-side:", err);
       // Client-side fallback computation
-      const localResults: RatioItem[] = ratioData.map((item) => {
-        const prev = item.previous_year;
-        const curr = item.current_year;
-        const var_pct = prev === 0 ? (curr > 0 ? 100.0 : 0.0) : Number((((curr - prev) / Math.abs(prev)) * 100).toFixed(2));
-        const is_statutory = Math.abs(var_pct) >= 25.0;
-        const direction = var_pct > 0 ? "increase" : "decrease";
-        const suggested_note = is_statutory
-          ? `The ${item.name} experienced a ${Math.abs(var_pct)}% ${direction} from ${prev} to ${curr}. As per Schedule III Part I of Companies Act, 2013, explanation is provided: The variation is primarily attributable to operational volume shifts, working capital adjustments, and market conditions.`
-          : null;
-        return {
-          name: item.name,
-          current_year: curr,
-          previous_year: prev,
-          variance_percentage: var_pct,
-          is_statutory_variance: is_statutory,
-          status: is_statutory ? "Requires Mandatory Disclosure Note" : "Within Normal Threshold",
-          suggested_note,
-        };
-      });
-      setResults(localResults);
+      setResults(computeScheduleIIIRatios(ratioData));
     } finally {
       setLoading(false);
     }
