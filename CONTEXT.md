@@ -79,11 +79,32 @@ LoopBack/
 │   │   └── store/            # Zustand stores for auth, UI, and client enclaves
 │   └── package.json          # Next.js 16 (Turbopack, port 3020), Tailwind CSS v4
 │
-├── law_frontend/             # Legal domain head (STAGED FOR FUTURE EXPANSION)
+├── law_frontend/             # Legal Practice & Litigation Head (Active Head, Port 3030)
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── (auth)/       # Advocate Authentication views
+│   │   │   ├── (dashboard)/  # Legal Practice & Litigation views:
+│   │   │   │   ├── dashboard/page.tsx       # Litigation Cockpit, limitation radar, active case hearings
+│   │   │   │   ├── limitation/page.tsx      # Limitation Period Calculator (Sec 18 tolling, Art 54/65/137)
+│   │   │   │   ├── precedents/page.tsx      # Case Law Precedents, landmark rulings, citation lookup
+│   │   │   │   ├── causelist/page.tsx       # Daily Court Cause List Tracker (High Court/District/NCLT)
+│   │   │   │   ├── chat/page.tsx            # Legal Advisory Copilot, statutory RAG, case research
+│   │   │   │   ├── documents/page.tsx       # Case Briefs, Pleadings & Evidence Library
+│   │   │   │   ├── documents/[id]/page.tsx  # Pleading Chunk Preview & Precedent Cross-Verification
+│   │   │   │   ├── tasks/page.tsx           # Court Hearings, Filings & Limitation Kanban
+│   │   │   │   ├── workspaces/page.tsx      # Case Matter Enclaves & Litigation Dossier Exporter
+│   │   │   │   └── settings/page.tsx        # Advocate Bar Profile (Enrollment No, Chamber Details, BYOK)
+│   │   │   ├── globals.css                  # Notion/ElevenLabs + Legal High-Density tokens
+│   │   │   └── layout.tsx                   # Root layout with Material Symbols and font definitions
+│   │   ├── components/       # Legal Layout (Sidebar, Header, Notifications)
+│   │   ├── lib/api.ts        # Typed fetch client with CSRF and auth headers
+│   │   └── store/            # Zustand stores for auth, UI, and matter enclaves
+│   └── package.json          # Next.js 16 (Turbopack, port 3030), Tailwind CSS v4
+│
 └── context.md                # Persistent project context documentation (this file)
 ```
 
-> **IMPORTANT BOUNDARY RULE:** `frontend/` (Student Appliance) and `ca_frontend/` (Chartered Accountant Appliance) are active heads. `law_frontend/` is reserved for future expansion.
+> **TRI-VERTICAL PLATFORM ARCHITECTURE:** `frontend/` (Student Appliance, port 3010), `ca_frontend/` (Chartered Accountant Appliance, port 3020), and `law_frontend/` (Legal Practice Appliance, port 3030) are all active heads connected to the shared FastAPI backend (`backend/`, port 19000). All share the exact same minimalist Notion/ElevenLabs Stitch design system, typography, and on-device privacy guarantee.
 
 ---
 
