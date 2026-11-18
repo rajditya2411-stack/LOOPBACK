@@ -1,6 +1,6 @@
 # Contributing to LoopBack
 
-Thanks for helping make LoopBack a durable, local-first open-source workspace.
+Internal guidelines for engineering and extending LoopBack's multi-vertical productivity and practice management platform.
 
 ## Development
 
