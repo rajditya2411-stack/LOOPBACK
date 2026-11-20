@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LoopBack – Student & Academic Frontend
+
+> **Academic Productivity, Active Recall & Knowledge Studio**  
+> *Port: `3010` · Next.js 16 (Turbopack) · Tailwind CSS*
+
+---
+
+## Overview
+
+The **Student & Academic Frontend** is the specialized educational and research head of the LoopBack platform. It provides a private, distraction-free environment for students, researchers, and lifelong learners to ingest complex study materials, conduct active recall sessions, and interact with a contextual AI study copilot.
+
+---
+
+## Core Capabilities
+
+- **Active Recall Knowledge Studio**: Ingest PDFs, Markdown notes, lecture slides, and text documents. Explain concepts in your own words and receive AI-driven evaluations of comprehension, missing concepts, and misconceptions.
+- **Dual Memory Architecture**:
+  - *Working Memory*: Active task contexts and current focus areas.
+  - *Episodic / Semantic Memory*: Long-term knowledge profile tracking mastery scores, strengths, and spaced revision intervals.
+- **Workspace-Scoped RAG**: Partition study documents into discrete course enclaves with selective ZIP export and on-demand PDF compilation.
+- **Academic Cockpit**: Daily study planner, goal milestones, streak counters, and learning analytics.
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 20+
+- LoopBack Core Backend running on `http://localhost:19000`
 
+### Development Server
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev # Starts on http://localhost:3010
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Production Build
+```bash
+npm run build
+npm start # Starts production server on http://localhost:3010
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Route Map
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Route | Description |
+| :--- | :--- |
+| `/dashboard` | Academic cockpit with study milestones, daily focus, and recent materials |
+| `/documents` | Document library, file upload, and active recall study sessions |
+| `/documents/[id]` | Document reader, study interface, and comprehension feedback |
+| `/chat` | AI Study Copilot with streaming responses and workspace-aware RAG |
+| `/tasks` | Course assignments, milestones, and spaced repetition deadlines |
+| `/workspaces` | Course and project enclaves with selective resource bundling and export |
+| `/memory` | Knowledge profile, semantic memories, and mastery review pipeline |
+| `/analytics` | Study time analytics, mastery curves, and revision metrics |
+| `/settings` | AI provider configuration, student profile, and system preferences |
